@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Clock } from 'lucide-react';
 
@@ -9,52 +10,66 @@ interface TimeInputProps {
 }
 
 export const TimeInput: React.FC<TimeInputProps> = ({ value, onChange, disabled, className }) => {
-  // Parse initial value ensuring fallbacks
-  const [initialH, initialM] = (value || '00:00').split(':');
+  const [hours, setHours] = useState('00');
+  const [minutes, setMinutes] = useState('00');
   
-  const [hours, setHours] = useState(initialH);
-  const [minutes, setMinutes] = useState(initialM);
+  // Track focus to prevent parent updates from clashing with typing
   const [isFocused, setIsFocused] = useState(false);
+  
+  // Refs for auto-focus navigation
+  const hoursInputRef = useRef<HTMLInputElement>(null);
+  const minutesInputRef = useRef<HTMLInputElement>(null);
 
-  // Sync internal state if external value changes (e.g. reset form)
+  // Sync from parent ONLY if not editing to avoid cursor jumping/overwriting
   useEffect(() => {
-    const [h, m] = (value || '00:00').split(':');
-    setHours(h);
-    setMinutes(m);
-  }, [value]);
-
-  const updateParent = (h: string, m: string) => {
-    onChange(`${h.padStart(2, '0')}:${m.padStart(2, '0')}`);
-  };
+    if (!isFocused) {
+      const [h, m] = (value || '00:00').split(':');
+      setHours(h);
+      setMinutes(m);
+    }
+  }, [value, isFocused]);
 
   const handleHoursChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let val = e.target.value.replace(/\D/g, ''); // Only numbers
+    let val = e.target.value.replace(/\D/g, '');
+    
+    // Limits
     if (val.length > 2) val = val.slice(0, 2);
+    if (parseInt(val) > 23) val = '23'; // Max 23h
+    
     setHours(val);
-    updateParent(val, minutes);
+    onChange(`${val}:${minutes}`); // Send raw value while typing
+
+    // Auto-focus minutes if 2 digits typed
+    if (val.length === 2) {
+        minutesInputRef.current?.focus();
+    }
   };
 
   const handleMinutesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let val = e.target.value.replace(/\D/g, '');
+    
     if (val.length > 2) val = val.slice(0, 2);
-    
-    // Clamp minutes to 59 logic is better handled on blur to allow typing, 
-    // but strict validation prevents > 59 if first digit > 5
-    if (parseInt(val) > 59) val = '59';
-    
+    if (parseInt(val) > 59) val = '59'; // Max 59m
+
     setMinutes(val);
-    updateParent(hours, val);
+    onChange(`${hours}:${val}`);
   };
 
   const handleBlur = () => {
     setIsFocused(false);
     
-    let finalH = hours === '' ? '00' : hours.padStart(2, '0');
-    let finalM = minutes === '' ? '00' : minutes.padStart(2, '0');
+    // Pad with zeros on blur for clean format
+    const finalH = hours === '' ? '00' : hours.padStart(2, '0');
+    const finalM = minutes === '' ? '00' : minutes.padStart(2, '0');
 
     setHours(finalH);
     setMinutes(finalM);
-    updateParent(finalH, finalM);
+    onChange(`${finalH}:${finalM}`);
+  };
+
+  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+      setIsFocused(true);
+      e.target.select(); // Select all content for easier overwriting
   };
 
   return (
@@ -69,24 +84,26 @@ export const TimeInput: React.FC<TimeInputProps> = ({ value, onChange, disabled,
       
       <div className="flex items-center gap-1 w-full justify-center">
         <input
+          ref={hoursInputRef}
           type="text"
           inputMode="numeric"
           disabled={disabled}
           value={hours}
           onChange={handleHoursChange}
-          onFocus={(e) => { setIsFocused(true); e.target.select(); }}
+          onFocus={handleFocus}
           onBlur={handleBlur}
           placeholder="HH"
           className="w-8 bg-transparent text-center text-white placeholder-slate-600 focus:outline-none font-mono text-sm"
         />
         <span className="text-slate-500 font-bold">:</span>
         <input
+          ref={minutesInputRef}
           type="text"
           inputMode="numeric"
           disabled={disabled}
           value={minutes}
           onChange={handleMinutesChange}
-          onFocus={(e) => { setIsFocused(true); e.target.select(); }}
+          onFocus={handleFocus}
           onBlur={handleBlur}
           placeholder="MM"
           className="w-8 bg-transparent text-center text-white placeholder-slate-600 focus:outline-none font-mono text-sm"
