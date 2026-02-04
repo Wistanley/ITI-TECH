@@ -1,31 +1,26 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 // SWITCH TO REAL BACKEND
 import { backend } from './services/supabaseBackend'; 
 import { Task, User, ActivityLog, Status, Sector, Project } from './types';
-import { Badge } from './components/ui/Badge';
 import { ActivityLogWidget } from './components/ActivityLogWidget';
 import { TaskModal } from './components/TaskModal';
 import { SettingsView } from './components/SettingsView';
 import { WeeklyPlanningView } from './components/WeeklyPlanningView';
 import { DashboardAnalytics } from './components/DashboardAnalytics';
+import { ActivitiesView } from './components/ActivitiesView';
 import { 
   LayoutDashboard, 
   CalendarDays, 
-  Search, 
   Plus, 
   ListTodo,
   LogOut,
-  User as UserIcon,
-  Filter,
   Mail,
   Lock,
   Loader2,
   ArrowRight,
   FolderOpen,
-  Copy,
-  Users,
-  Download,
-  CheckCircle2
+  Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -146,13 +141,10 @@ export default function App() {
   const [isLoadingSession, setIsLoadingSession] = useState(true);
   
   // UI State
-  const [currentView, setCurrentView] = useState<'dashboard' | 'planning' | 'settings'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'activities' | 'planning' | 'settings'>('dashboard');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [duplicatingTask, setDuplicatingTask] = useState<Task | null>(null);
-  const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('ALL');
-  const [filterScope, setFilterScope] = useState<'ALL' | 'MINE'>('ALL');
 
   // 1. Init Auth Check
   useEffect(() => {
@@ -177,13 +169,10 @@ export default function App() {
       setProjects(backend.getProjects());
     };
 
-    // Initial fetch (Calls async init inside backend, then notifies)
-    // Note: checkSession already calls initializeData, but redundant call here is safe due to guards
     backend.initializeData().then(() => {
       refreshData();
     });
 
-    // Realtime subscription
     const unsubscribe = backend.subscribe(() => {
       refreshData();
     });
@@ -234,25 +223,13 @@ export default function App() {
     return { myHours, completed, pending, total: tasks.length };
   }, [tasks, currentUser]);
 
-  // Filtering
-  const filteredTasks = tasks.filter(t => {
-    const projectName = getProjectName(t.projectId).toLowerCase();
-    const matchesSearch = projectName.includes(search.toLowerCase()) || 
-                          t.plannedActivity.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = filterStatus === 'ALL' || t.status === filterStatus;
-    const matchesScope = filterScope === 'ALL' || t.collaboratorId === currentUser?.id;
-
-    return matchesSearch && matchesStatus && matchesScope;
-  });
-
   // Export to CSV Logic
   const handleExportCSV = () => {
-    if (filteredTasks.length === 0) {
-      alert('Não há dados para exportar com os filtros atuais.');
+    if (tasks.length === 0) {
+      alert('Não há dados para exportar.');
       return;
     }
 
-    // 1. Define Headers
     const headers = [
       'Projeto',
       'Setor',
@@ -266,12 +243,9 @@ export default function App() {
       'Observações'
     ];
 
-    // 2. Map Rows
-    const rows = filteredTasks.map(t => {
+    const rows = tasks.map(t => {
       const projectName = getProjectName(t.projectId);
       const collaboratorName = users.find(u => u.id === t.collaboratorId)?.name || 'N/A';
-      
-      // Helper to escape CSV fields
       const escape = (str: string | undefined | null) => {
         const s = str ? String(str) : '';
         return `"${s.replace(/"/g, '""')}"`;
@@ -292,7 +266,6 @@ export default function App() {
     });
 
     const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
-
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -345,9 +318,18 @@ export default function App() {
             onClick={() => setCurrentView('dashboard')}
             className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg border font-medium transition-all ${currentView === 'dashboard' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'}`}
           >
-            <ListTodo size={18} />
+            <LayoutDashboard size={18} />
             <span>Dashboard</span>
           </button>
+          
+          <button 
+            onClick={() => setCurrentView('activities')}
+            className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg border font-medium transition-all ${currentView === 'activities' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'}`}
+          >
+            <ListTodo size={18} />
+            <span>Atividades</span>
+          </button>
+
            <button 
             onClick={() => setCurrentView('planning')}
             className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg border font-medium transition-all ${currentView === 'planning' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'}`}
@@ -384,12 +366,14 @@ export default function App() {
         {/* Top Header */}
         <header className="h-16 border-b border-slate-800 bg-navy-900/80 backdrop-blur-md flex items-center justify-between px-6 z-20">
           <h1 className="text-lg font-semibold text-white">
-            {currentView === 'dashboard' && 'Visão Geral da Semana'}
+            {currentView === 'dashboard' && 'Visão Geral (Analytics)'}
+            {currentView === 'activities' && 'Lista de Atividades'}
             {currentView === 'planning' && 'Agenda Semanal'}
             {currentView === 'settings' && 'Gerenciamento'}
           </h1>
           <div className="flex items-center gap-3">
-             {currentView === 'dashboard' && (
+             {/* Common Actions for Dashboard/Activities */}
+             {(currentView === 'dashboard' || currentView === 'activities') && (
                <>
                  <div className="hidden md:flex items-center gap-6 mr-2 text-sm text-slate-400">
                     <div className="flex items-center gap-2">
@@ -401,7 +385,7 @@ export default function App() {
                  <button
                    onClick={handleExportCSV}
                    className="hidden sm:flex items-center gap-2 bg-navy-800 border border-slate-700 hover:bg-navy-700 text-slate-300 text-sm font-medium px-4 py-2 rounded-lg transition-all"
-                   title="Exportar dados filtrados para CSV"
+                   title="Exportar CSV"
                  >
                    <Download size={16} />
                    <span>Exportar</span>
@@ -421,182 +405,49 @@ export default function App() {
         </header>
 
         {/* Dynamic Body */}
-        {currentView === 'dashboard' ? (
-           <div className="flex-1 p-6 overflow-hidden flex gap-6">
+        <div className="flex-1 p-6 overflow-hidden flex gap-6">
           
-          {/* Left Column: Task Table */}
+          {/* Main View Container */}
           <div className="flex-1 flex flex-col min-w-0 overflow-y-auto custom-scrollbar">
             
-            {/* --- ANALYTICS DASHBOARD --- */}
-            <DashboardAnalytics tasks={filteredTasks} projects={projects} users={users} />
+            {/* VIEW: DASHBOARD */}
+            {currentView === 'dashboard' && (
+               <DashboardAnalytics tasks={tasks} projects={projects} users={users} />
+            )}
 
-            {/* Filters */}
-            <div className="flex flex-col sm:flex-row gap-4 mb-6 justify-between items-start sm:items-center">
-              <div className="relative w-full sm:w-72 group">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary transition-colors" size={16} />
-                <input 
-                  type="text"
-                  placeholder="Buscar por projeto ou atividade..." 
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="w-full bg-navy-800 border border-slate-700 text-sm rounded-lg pl-10 pr-4 py-2.5 text-white placeholder-slate-500 focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all"
-                />
-              </div>
-              
-              <div className="flex gap-4 items-center">
-                 {/* Scope Toggle */}
-                 <div className="bg-navy-800 p-1 rounded-lg border border-slate-700 flex items-center">
-                    <button
-                      onClick={() => setFilterScope('ALL')}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-2 ${
-                        filterScope === 'ALL' 
-                          ? 'bg-slate-700 text-white shadow-sm' 
-                          : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
-                      }`}
-                    >
-                      <Users size={14} />
-                      Todas
-                    </button>
-                    <button
-                      onClick={() => setFilterScope('MINE')}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-2 ${
-                        filterScope === 'MINE' 
-                          ? 'bg-primary/10 text-primary border border-primary/20 shadow-sm' 
-                          : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
-                      }`}
-                    >
-                      <UserIcon size={14} />
-                      Minhas
-                    </button>
-                 </div>
+            {/* VIEW: ACTIVITIES */}
+            {currentView === 'activities' && (
+              <ActivitiesView 
+                tasks={tasks}
+                projects={projects}
+                users={users}
+                currentUser={currentUser}
+                onEdit={handleEdit}
+                onDuplicate={handleDuplicate}
+                onDelete={handleDelete}
+              />
+            )}
 
-                 <div className="h-6 w-px bg-slate-800"></div>
+            {/* VIEW: PLANNING */}
+            {currentView === 'planning' && (
+              <WeeklyPlanningView tasks={tasks} projects={projects} currentUser={currentUser} />
+            )}
 
-                 <div className="relative">
-                    <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
-                    <select 
-                      value={filterStatus}
-                      onChange={(e) => setFilterStatus(e.target.value)}
-                      className="bg-navy-800 border border-slate-700 text-slate-300 text-sm rounded-lg focus:ring-primary focus:border-primary block pl-9 pr-8 py-2 appearance-none outline-none cursor-pointer hover:bg-navy-700 transition-colors"
-                    >
-                      <option value="ALL">Todos os Status</option>
-                      {Object.values(Status).map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                 </div>
-              </div>
-            </div>
-
-            {/* Table Container */}
-            <div className="bg-navy-800/40 border border-slate-800 rounded-xl overflow-hidden flex flex-col shadow-xl">
-              <div className="overflow-x-auto custom-scrollbar">
-                <table className="w-full text-sm text-left">
-                  <thead className="text-xs text-slate-400 uppercase bg-navy-900/80 sticky top-0 z-10 backdrop-blur-sm">
-                    <tr>
-                      <th className="px-6 py-4 font-medium">Projeto / Colaborador</th>
-                      <th className="px-6 py-4 font-medium">Atividade Planejada</th>
-                      <th className="px-6 py-4 font-medium">Prioridade</th>
-                      <th className="px-6 py-4 font-medium">Status</th>
-                      <th className="px-6 py-4 font-medium">Entrega</th>
-                      <th className="px-6 py-4 font-medium text-right">Horas</th>
-                      <th className="px-6 py-4 font-medium text-center">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800">
-                    <AnimatePresence>
-                    {filteredTasks.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
-                          Nenhuma atividade encontrada com os filtros atuais.
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredTasks.map((task) => {
-                        const user = users.find(u => u.id === task.collaboratorId);
-                        const isOwner = currentUser.id === task.collaboratorId || currentUser.role === 'admin';
-                        const projectName = getProjectName(task.projectId);
-                        
-                        return (
-                          <motion.tr 
-                            key={task.id}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.98 }}
-                            transition={{ duration: 0.2 }}
-                            className="bg-navy-900/20 hover:bg-white/[0.02] group transition-colors"
-                          >
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex items-center gap-3">
-                                <div className="flex-shrink-0 w-8 h-8 relative">
-                                  <img className="w-8 h-8 rounded-full border border-slate-700" src={user?.avatar} alt="" />
-                                  <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-navy-900 ${user?.id === currentUser.id ? 'bg-green-500' : 'bg-slate-500'}`}></div>
-                                </div>
-                                <div>
-                                  <div className="font-medium text-white">{projectName}</div>
-                                  <div className="text-xs text-slate-500">{user?.name}</div>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 max-w-xs">
-                              <div className="text-slate-300 truncate font-medium">{task.plannedActivity}</div>
-                              {task.deliveredActivity && (
-                                <div className="text-xs text-emerald-500/80 truncate mt-0.5 flex items-center gap-1">
-                                   <CheckCircle2 size={10} /> {task.deliveredActivity}
-                                </div>
-                              )}
-                            </td>
-                            <td className="px-6 py-4">
-                              <Badge type="priority" value={task.priority} />
-                            </td>
-                            <td className="px-6 py-4">
-                              <Badge type="status" value={task.status} />
-                            </td>
-                            <td className="px-6 py-4 text-slate-400 font-mono text-xs">
-                               {new Date(task.dueDate).toLocaleDateString('pt-BR')}
-                            </td>
-                            <td className="px-6 py-4 text-right font-mono text-slate-300">
-                              {task.hoursDedicated}
-                            </td>
-                            <td className="px-6 py-4 text-center">
-                              {isOwner && (
-                                <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <button onClick={() => handleEdit(task)} className="p-1.5 hover:bg-blue-500/20 rounded text-blue-400 transition-colors" title="Editar">
-                                    <EditIcon size={16} />
-                                  </button>
-                                  <button onClick={() => handleDuplicate(task)} className="p-1.5 hover:bg-emerald-500/20 rounded text-emerald-400 transition-colors" title="Duplicar">
-                                    <Copy size={16} />
-                                  </button>
-                                  <button onClick={() => handleDelete(task.id)} className="p-1.5 hover:bg-red-500/20 rounded text-red-400 transition-colors" title="Excluir">
-                                    <TrashIcon size={16} />
-                                  </button>
-                                </div>
-                              )}
-                            </td>
-                          </motion.tr>
-                        );
-                      })
-                    )}
-                    </AnimatePresence>
-                  </tbody>
-                </table>
-              </div>
-              <div className="px-6 py-3 border-t border-slate-800 bg-navy-900/50 text-xs text-slate-500 flex justify-between items-center">
-                 <span>Mostrando {filteredTasks.length} registros</span>
-                 <span>Última atualização: {new Date().toLocaleTimeString('pt-BR')}</span>
-              </div>
-            </div>
+            {/* VIEW: SETTINGS */}
+            {currentView === 'settings' && (
+              <SettingsView sectors={sectors} projects={projects} users={users} />
+            )}
+            
           </div>
 
-          {/* Right Column: Activity Log Widget */}
-          <div className="w-80 hidden xl:block">
-            <ActivityLogWidget logs={logs} />
-          </div>
+          {/* Right Column: Activity Log Widget (Visible on Dashboard and Activities) */}
+          {(currentView === 'dashboard' || currentView === 'activities') && (
+            <div className="w-80 hidden xl:block">
+              <ActivityLogWidget logs={logs} />
+            </div>
+          )}
 
         </div>
-        ) : currentView === 'planning' ? (
-           <WeeklyPlanningView tasks={tasks} projects={projects} currentUser={currentUser} />
-        ) : (
-          <SettingsView sectors={sectors} projects={projects} users={users} />
-        )}
       </main>
 
       <TaskModal 
@@ -611,12 +462,3 @@ export default function App() {
     </div>
   );
 }
-
-// Simple Icon Wrappers to avoid "lucide-react" import errors if icons missing in set
-const EditIcon = ({ size }: { size: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-);
-
-const TrashIcon = ({ size }: { size: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-);
