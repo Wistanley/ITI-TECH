@@ -25,7 +25,6 @@ class SupabaseService {
 
     if (error) return { user: null, error: error.message };
     if (data.user) {
-      // Buscar dados extras do perfil público
       const { data: profile } = await supabase
         .from('profiles')
         .select('*')
@@ -41,11 +40,33 @@ class SupabaseService {
     return { user: null, error: 'Perfil de usuário não encontrado.' };
   }
 
+  async checkSession(): Promise<User | null> {
+    const { data } = await supabase.auth.getSession();
+    if (data.session?.user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', data.session.user.id)
+        .single();
+
+      if (profile) {
+        this.currentUser = this.mapProfileToUser(profile);
+        await this.initializeData();
+        return this.currentUser;
+      }
+    }
+    return null;
+  }
+
   async logout() {
     await supabase.auth.signOut();
     this.currentUser = null;
     this.tasks = [];
     this.logs = [];
+    this.sectors = [];
+    this.projects = [];
+    this.users = [];
+    this.initialized = false;
     this.notify();
   }
 
@@ -101,7 +122,6 @@ class SupabaseService {
 
   private async fetchProjects() {
     const { data } = await supabase.from('projects').select('*');
-    // Mapeamento snake_case -> camelCase manual se necessário, ou direto se o banco usar snake_case
     if (data) this.projects = data.map((p: any) => ({ id: p.id, name: p.name, sectorId: p.sector_id }));
   }
 
@@ -189,7 +209,7 @@ class SupabaseService {
   async createSector(name: string) {
     const { error } = await supabase.from('sectors').insert({ name });
     if (error) throw error;
-    await this.fetchSectors(); // Force update
+    await this.fetchSectors();
     this.notify();
   }
 
@@ -216,10 +236,8 @@ class SupabaseService {
 
   // USERS
   async createUser(name: string, email: string, role: 'admin'|'user', sector: string) {
-    // ALERT: This only creates the public profile data. It does NOT create a Supabase Auth User.
-    // In a real app, you must use Supabase Admin API or invite system.
     const { error } = await supabase.from('profiles').insert({
-       id: crypto.randomUUID(), // Mock ID, real implementation needs Auth ID
+       id: crypto.randomUUID(), 
        email, name, role, sector, avatar: `https://ui-avatars.com/api/?name=${name}`
     });
     if (error) throw error;

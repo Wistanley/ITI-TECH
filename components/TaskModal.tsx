@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Task, Priority, Status } from '../types';
-import { backend } from '../services/mockBackend';
+import { Task, Priority, Status, Project, Sector, User } from '../types';
+import { backend } from '../services/supabaseBackend';
 import { TimeInput } from './ui/TimeInput';
 import { X, Copy } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -10,6 +10,9 @@ interface Props {
   onClose: () => void;
   taskToEdit?: Task | null;
   initialData?: Task | null;
+  projects: Project[];
+  sectors: Sector[];
+  users: User[];
 }
 
 const overlayVariants = {
@@ -32,11 +35,7 @@ const getTodayInSP = () => {
     return `${y}-${m}-${d}`;
 };
 
-export const TaskModal: React.FC<Props> = ({ isOpen, onClose, taskToEdit, initialData }) => {
-  const users = backend.getUsers();
-  const projects = backend.getProjects();
-  const sectors = backend.getSectors();
-  
+export const TaskModal: React.FC<Props> = ({ isOpen, onClose, taskToEdit, initialData, projects, sectors, users }) => {
   const [formData, setFormData] = useState<Partial<Task>>({
     projectId: '',
     collaboratorId: backend.currentUser?.id || '',

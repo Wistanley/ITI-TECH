@@ -143,6 +143,7 @@ export default function App() {
   const [users, setUsers] = useState<User[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [isLoadingSession, setIsLoadingSession] = useState(true);
   
   // UI State
   const [currentView, setCurrentView] = useState<'dashboard' | 'planning' | 'settings'>('dashboard');
@@ -153,7 +154,17 @@ export default function App() {
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
   const [filterScope, setFilterScope] = useState<'ALL' | 'MINE'>('ALL');
 
-  // Load Data Effect
+  // 1. Init Auth Check
+  useEffect(() => {
+    const initAuth = async () => {
+      const user = await backend.checkSession();
+      if (user) setCurrentUser(user);
+      setIsLoadingSession(false);
+    };
+    initAuth();
+  }, []);
+
+  // 2. Load Data Subscription
   useEffect(() => {
     // Only subscribe if logged in
     if (!currentUser) return;
@@ -167,6 +178,7 @@ export default function App() {
     };
 
     // Initial fetch (Calls async init inside backend, then notifies)
+    // Note: checkSession already calls initializeData, but redundant call here is safe due to guards
     backend.initializeData().then(() => {
       refreshData();
     });
@@ -290,6 +302,14 @@ export default function App() {
     link.click();
     document.body.removeChild(link);
   };
+
+  if (isLoadingSession) {
+    return (
+      <div className="h-screen bg-[#02040a] flex items-center justify-center">
+         <Loader2 className="animate-spin text-primary" size={32} />
+      </div>
+    );
+  }
 
   if (!currentUser) {
     return <LoginScreen onLogin={handleLoginSuccess} />;
@@ -584,6 +604,9 @@ export default function App() {
         onClose={() => setIsModalOpen(false)} 
         taskToEdit={editingTask}
         initialData={duplicatingTask}
+        projects={projects}
+        sectors={sectors}
+        users={users}
       />
     </div>
   );
