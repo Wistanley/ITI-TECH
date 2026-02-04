@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import { Task, Project, Status, Priority } from '../types';
-import { backend } from '../services/mockBackend';
+import { backend } from '../services/supabaseBackend';
 import { CalendarDays, CheckCircle2, Circle, Plus, AlertCircle, Briefcase } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -61,34 +62,42 @@ export const WeeklyPlanningView: React.FC<Props> = ({ tasks, projects, currentUs
     );
   };
 
-  const handleQuickAdd = (date: string) => {
+  const handleQuickAdd = async (date: string) => {
     if (!quickProjectId || !quickActivity.trim()) return;
 
-    // Resolve Sector
-    const project = projects.find(p => p.id === quickProjectId);
-    const sectors = backend.getSectors();
-    const sector = sectors.find(s => s.id === project?.sectorId)?.name || '';
+    try {
+        // Resolve Sector
+        const project = projects.find(p => p.id === quickProjectId);
+        const sectors = backend.getSectors();
+        const sector = sectors.find(s => s.id === project?.sectorId)?.name || '';
 
-    backend.createTask({
-      projectId: quickProjectId,
-      collaboratorId: currentUser.id,
-      sector: sector,
-      plannedActivity: quickActivity,
-      deliveredActivity: '',
-      priority: Priority.MEDIUM,
-      status: Status.PENDING,
-      hoursDedicated: '00:00',
-      notes: '',
-      dueDate: date,
-    });
+        await backend.createTask({
+          projectId: quickProjectId,
+          collaboratorId: currentUser.id,
+          sector: sector,
+          plannedActivity: quickActivity,
+          deliveredActivity: '',
+          priority: Priority.MEDIUM,
+          status: Status.PENDING,
+          hoursDedicated: '00:00',
+          notes: '',
+          dueDate: date,
+        });
 
-    // Reset
-    setQuickActivity('');
-    // Keep Project ID selected for convenience
+        // Reset
+        setQuickActivity('');
+        // Keep Project ID selected for convenience
+    } catch (err: any) {
+        alert(err.message);
+    }
   };
 
-  const toggleCheck = (id: string) => {
-    backend.toggleTaskCompletion(id);
+  const toggleCheck = async (id: string) => {
+    try {
+        await backend.toggleTaskCompletion(id);
+    } catch (err: any) {
+        alert(err.message);
+    }
   };
 
   // Helper for Display Date (DD/MM) handling timezone correctly for display
