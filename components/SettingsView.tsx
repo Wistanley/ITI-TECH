@@ -1,7 +1,8 @@
+
 import React, { useState } from 'react';
-import { backend } from '../services/mockBackend';
+import { backend } from '../services/supabaseBackend';
 import { Project, Sector, User } from '../types';
-import { Plus, Trash2, Layers, Folder, FolderPlus, Grid, UserPlus, Users, Shield } from 'lucide-react';
+import { Plus, Trash2, Layers, Folder, FolderPlus, Grid, UserPlus, Users, Shield, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface Props {
@@ -13,6 +14,7 @@ interface Props {
 export const SettingsView: React.FC<Props> = ({ sectors, projects, users }) => {
   // Sector Input State
   const [newSectorName, setNewSectorName] = useState('');
+  const [loading, setLoading] = useState(false);
   
   // Project Input State
   const [newProjectName, setNewProjectName] = useState('');
@@ -22,50 +24,83 @@ export const SettingsView: React.FC<Props> = ({ sectors, projects, users }) => {
   const [newUser, setNewUser] = useState({ name: '', email: '', role: 'user', sector: '' });
 
   // --- Handlers ---
-  const handleAddSector = (e: React.FormEvent) => {
+  const handleAddSector = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newSectorName.trim()) {
-      backend.createSector(newSectorName);
-      setNewSectorName('');
+      setLoading(true);
+      try {
+        await backend.createSector(newSectorName);
+        setNewSectorName('');
+      } catch (err: any) {
+        alert(err.message);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
-  const handleDeleteSector = (id: string) => {
+  const handleDeleteSector = async (id: string) => {
     if (confirm('Excluir este setor?')) {
-      backend.deleteSector(id);
+      try {
+        await backend.deleteSector(id);
+      } catch (err: any) {
+        alert(err.message);
+      }
     }
   };
 
-  const handleAddProject = (e: React.FormEvent) => {
+  const handleAddProject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newProjectName.trim() && selectedSectorId) {
-      backend.createProject(newProjectName, selectedSectorId);
-      setNewProjectName('');
+      setLoading(true);
+      try {
+        await backend.createProject(newProjectName, selectedSectorId);
+        setNewProjectName('');
+      } catch (err: any) {
+        alert(err.message);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
-  const handleDeleteProject = (id: string) => {
+  const handleDeleteProject = async (id: string) => {
     if (confirm('Excluir este projeto?')) {
-      backend.deleteProject(id);
+      try {
+        await backend.deleteProject(id);
+      } catch (err: any) {
+        alert(err.message);
+      }
     }
   };
 
-  const handleAddUser = (e: React.FormEvent) => {
+  const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newUser.name && newUser.email && newUser.sector) {
-      backend.createUser(newUser.name, newUser.email, newUser.role as 'admin'|'user', newUser.sector);
-      setNewUser({ name: '', email: '', role: 'user', sector: '' });
+      setLoading(true);
+      try {
+        await backend.createUser(newUser.name, newUser.email, newUser.role as 'admin'|'user', newUser.sector);
+        setNewUser({ name: '', email: '', role: 'user', sector: '' });
+      } catch (err: any) {
+        alert(err.message);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
-  const handleDeleteUser = (id: string) => {
-      // Prevent deleting self (simple check)
+  const handleDeleteUser = async (id: string) => {
+      // Prevent deleting self
       if(id === backend.currentUser?.id) {
           alert("Você não pode excluir seu próprio usuário.");
           return;
       }
       if (confirm('Excluir este usuário?')) {
-          backend.deleteUser(id);
+          try {
+             await backend.deleteUser(id);
+          } catch (err: any) {
+             alert(err.message);
+          }
       }
   };
 
@@ -73,8 +108,15 @@ export const SettingsView: React.FC<Props> = ({ sectors, projects, users }) => {
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="p-8 h-full overflow-y-auto custom-scrollbar"
+      className="p-8 h-full overflow-y-auto custom-scrollbar relative"
     >
+      {loading && (
+        <div className="absolute top-4 right-8 text-primary flex items-center gap-2 bg-navy-800 px-3 py-1 rounded-full border border-primary/20 text-xs shadow-lg z-50">
+           <Loader2 className="animate-spin" size={14} />
+           Processando...
+        </div>
+      )}
+
       <header className="mb-8">
         <h2 className="text-2xl font-bold text-white flex items-center gap-3">
           <Grid className="text-primary" size={28} />
@@ -102,7 +144,7 @@ export const SettingsView: React.FC<Props> = ({ sectors, projects, users }) => {
             />
             <button 
               type="submit" 
-              disabled={!newSectorName.trim()}
+              disabled={!newSectorName.trim() || loading}
               className="bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-white p-2 rounded-lg transition-colors"
             >
               <Plus size={20} />
@@ -168,7 +210,7 @@ export const SettingsView: React.FC<Props> = ({ sectors, projects, users }) => {
              </div>
              <button 
               type="submit" 
-              disabled={!newProjectName.trim() || !selectedSectorId}
+              disabled={!newProjectName.trim() || !selectedSectorId || loading}
               className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm font-medium"
             >
               <FolderPlus size={16} />
@@ -211,7 +253,7 @@ export const SettingsView: React.FC<Props> = ({ sectors, projects, users }) => {
           </div>
         </div>
 
-        {/* --- 3. Users Column (NEW) --- */}
+        {/* --- 3. Users Column --- */}
         <div className="bg-navy-800/50 border border-slate-700 rounded-xl p-6 shadow-xl flex flex-col h-[500px]">
            <div className="flex items-center gap-2 mb-6 text-lg font-semibold text-slate-200">
             <Users className="text-emerald-400" />
@@ -261,7 +303,7 @@ export const SettingsView: React.FC<Props> = ({ sectors, projects, users }) => {
              </div>
              <button 
               type="submit" 
-              disabled={!newUser.name || !newUser.email || !newUser.sector}
+              disabled={!newUser.name || !newUser.email || !newUser.sector || loading}
               className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm font-medium"
             >
               <UserPlus size={16} />

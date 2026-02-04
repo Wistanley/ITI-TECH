@@ -1,4 +1,3 @@
-
 import { supabase } from '../lib/supabaseClient';
 import { Task, User, ActivityLog, Status, Priority, Sector, Project } from '../types';
 
@@ -143,7 +142,9 @@ class SupabaseService {
       updated_at: new Date().toISOString()
     };
     
-    await supabase.from('tasks').insert(dbTask);
+    const { error } = await supabase.from('tasks').insert(dbTask);
+    if (error) throw new Error(`Erro ao criar tarefa: ${error.message}`);
+    
     this.logAction('CREATE', `Nova tarefa: ${task.plannedActivity}`);
   }
 
@@ -159,7 +160,9 @@ class SupabaseService {
     if (updates.priority) dbUpdates.priority = updates.priority;
     if (updates.notes) dbUpdates.notes = updates.notes;
 
-    await supabase.from('tasks').update(dbUpdates).eq('id', id);
+    const { error } = await supabase.from('tasks').update(dbUpdates).eq('id', id);
+    if (error) throw new Error(`Erro ao atualizar tarefa: ${error.message}`);
+    
     this.logAction('UPDATE', `Tarefa atualizada`);
   }
 
@@ -177,39 +180,58 @@ class SupabaseService {
   }
 
   async deleteTask(id: string) {
-    await supabase.from('tasks').delete().eq('id', id);
+    const { error } = await supabase.from('tasks').delete().eq('id', id);
+    if (error) throw new Error(`Erro ao excluir tarefa: ${error.message}`);
     this.logAction('DELETE', 'Tarefa removida');
   }
 
   // SECTORS & PROJECTS
   async createSector(name: string) {
-    await supabase.from('sectors').insert({ name });
-  }
-  async deleteSector(id: string) {
-    await supabase.from('sectors').delete().eq('id', id);
-  }
-  async createProject(name: string, sectorId: string) {
-    await supabase.from('projects').insert({ name, sector_id: sectorId });
-  }
-  async deleteProject(id: string) {
-    await supabase.from('projects').delete().eq('id', id);
+    const { error } = await supabase.from('sectors').insert({ name });
+    if (error) throw error;
+    await this.fetchSectors(); // Force update
+    this.notify();
   }
 
-  // USERS (Admin only logic usually, but strictly speaking this creates Auth users + Profile)
-  // For simplicity in this demo, we assume the user just inserts into 'profiles' 
-  // NOTE: Real production apps need Edge Functions to create Auth users safely.
+  async deleteSector(id: string) {
+    const { error } = await supabase.from('sectors').delete().eq('id', id);
+    if (error) throw new Error("Não é possível excluir este setor. Verifique se existem projetos vinculados a ele.");
+    await this.fetchSectors();
+    this.notify();
+  }
+
+  async createProject(name: string, sectorId: string) {
+    const { error } = await supabase.from('projects').insert({ name, sector_id: sectorId });
+    if (error) throw error;
+    await this.fetchProjects();
+    this.notify();
+  }
+
+  async deleteProject(id: string) {
+    const { error } = await supabase.from('projects').delete().eq('id', id);
+    if (error) throw new Error("Não é possível excluir este projeto. Verifique se existem tarefas vinculadas a ele.");
+    await this.fetchProjects();
+    this.notify();
+  }
+
+  // USERS
   async createUser(name: string, email: string, role: 'admin'|'user', sector: string) {
-    // ALERT: This only creates the public profile in this demo. 
-    // In production, invite the user via supabase.auth.admin.inviteUserByEmail()
-    await supabase.from('profiles').insert({
-       id: crypto.randomUUID(), // This will fail foreign key if not in auth.users. 
-       // For a quick deploy without backend functions, we can remove the FK in SQL or mock the ID.
+    // ALERT: This only creates the public profile data. It does NOT create a Supabase Auth User.
+    // In a real app, you must use Supabase Admin API or invite system.
+    const { error } = await supabase.from('profiles').insert({
+       id: crypto.randomUUID(), // Mock ID, real implementation needs Auth ID
        email, name, role, sector, avatar: `https://ui-avatars.com/api/?name=${name}`
     });
+    if (error) throw error;
+    await this.fetchUsers();
+    this.notify();
   }
 
   async deleteUser(id: string) {
-    await supabase.from('profiles').delete().eq('id', id);
+    const { error } = await supabase.from('profiles').delete().eq('id', id);
+    if (error) throw new Error("Não é possível excluir este usuário. Verifique se ele possui tarefas atribuídas.");
+    await this.fetchUsers();
+    this.notify();
   }
 
   // --- Helpers ---
