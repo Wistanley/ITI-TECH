@@ -458,7 +458,7 @@ export default function App() {
           {/* Right Column: Activity Log Widget (Visible on Dashboard and Activities) */}
           {(currentView === 'dashboard' || currentView === 'activities') && (
             <div className="w-80 hidden xl:block">
-              <ActivityLogWidget logs={logs} />
+              <ActivityLogWidget logs={logs} users={users} />
             </div>
           )}
 
