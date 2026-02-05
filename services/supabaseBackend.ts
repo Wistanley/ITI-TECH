@@ -113,8 +113,9 @@ class SupabaseService {
   }
 
   async uploadAvatar(userId: string, file: File): Promise<string> {
-    // 1. Create a unique file path: avatars/userId_timestamp.ext
-    const fileExt = file.name.split('.').pop();
+    // 1. Sanitize and Create Path
+    const fileExt = file.name.split('.').pop() || 'jpg';
+    // Remove special chars to avoid storage issues
     const fileName = `avatars/${userId}_${Date.now()}.${fileExt}`;
 
     // 2. Upload to 'images' bucket
@@ -122,10 +123,11 @@ class SupabaseService {
       .from('images')
       .upload(fileName, file, {
         cacheControl: '3600',
-        upsert: false
+        upsert: true // Allow overwriting to prevent errors on retries
       });
 
     if (uploadError) {
+      console.error("Upload Error Details:", uploadError);
       throw new Error(`Erro no upload: ${uploadError.message}`);
     }
 

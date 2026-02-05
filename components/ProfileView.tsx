@@ -67,7 +67,12 @@ export const ProfileView: React.FC<Props> = ({ currentUser, sectors }) => {
       setProfileMessage({ type: 'success', text: 'Perfil atualizado com sucesso!' });
       setSelectedFile(null); // Clear file selection after success
     } catch (err: any) {
-      setProfileMessage({ type: 'error', text: err.message || 'Erro ao atualizar perfil.' });
+      // Check for common RLS error
+      let msg = err.message || 'Erro ao atualizar perfil.';
+      if (msg.includes('row-level security')) {
+         msg = 'Erro de Permissão: Configure as Políticas (Policies) do Storage no Supabase para permitir Uploads.';
+      }
+      setProfileMessage({ type: 'error', text: msg });
     } finally {
       setProfileLoading(false);
     }
