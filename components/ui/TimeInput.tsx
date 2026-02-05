@@ -32,9 +32,11 @@ export const TimeInput: React.FC<TimeInputProps> = ({ value, onChange, disabled,
   const handleHoursChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let val = e.target.value.replace(/\D/g, '');
     
-    // Limits
+    // Allow up to 2 digits (Max 99 hours). 
+    // If you need > 100 hours, change to slice(0, 3) and adjust width in CSS.
     if (val.length > 2) val = val.slice(0, 2);
-    if (parseInt(val) > 23) val = '23'; // Max 23h
+    
+    // REMOVED: limit > 23. This is a duration field, so 35 hours is valid.
     
     setHours(val);
     onChange(`${val}:${minutes}`); // Send raw value while typing
@@ -49,7 +51,8 @@ export const TimeInput: React.FC<TimeInputProps> = ({ value, onChange, disabled,
     let val = e.target.value.replace(/\D/g, '');
     
     if (val.length > 2) val = val.slice(0, 2);
-    if (parseInt(val) > 59) val = '59'; // Max 59m
+    // Keep 59 limit for minutes as that makes sense even in duration
+    if (parseInt(val) > 59) val = '59'; 
 
     setMinutes(val);
     onChange(`${hours}:${val}`);
@@ -69,7 +72,8 @@ export const TimeInput: React.FC<TimeInputProps> = ({ value, onChange, disabled,
 
   const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
       setIsFocused(true);
-      e.target.select(); // Select all content for easier overwriting
+      // Timeout insures selection happens after render cycle/focus event
+      setTimeout(() => e.target.select(), 0);
   };
 
   return (
@@ -93,7 +97,7 @@ export const TimeInput: React.FC<TimeInputProps> = ({ value, onChange, disabled,
           onFocus={handleFocus}
           onBlur={handleBlur}
           placeholder="HH"
-          className="w-8 bg-transparent text-center text-white placeholder-slate-600 focus:outline-none font-mono text-sm"
+          className="w-9 bg-transparent text-center text-white placeholder-slate-600 focus:outline-none font-mono text-sm selection:bg-primary/30"
         />
         <span className="text-slate-500 font-bold">:</span>
         <input
@@ -106,7 +110,7 @@ export const TimeInput: React.FC<TimeInputProps> = ({ value, onChange, disabled,
           onFocus={handleFocus}
           onBlur={handleBlur}
           placeholder="MM"
-          className="w-8 bg-transparent text-center text-white placeholder-slate-600 focus:outline-none font-mono text-sm"
+          className="w-9 bg-transparent text-center text-white placeholder-slate-600 focus:outline-none font-mono text-sm selection:bg-primary/30"
         />
       </div>
     </div>
