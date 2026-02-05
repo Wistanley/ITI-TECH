@@ -9,6 +9,7 @@ import { SettingsView } from './components/SettingsView';
 import { WeeklyPlanningView } from './components/WeeklyPlanningView';
 import { DashboardAnalytics } from './components/DashboardAnalytics';
 import { ActivitiesView } from './components/ActivitiesView';
+import { ProfileView } from './components/ProfileView';
 import { 
   LayoutDashboard, 
   CalendarDays, 
@@ -20,7 +21,8 @@ import {
   Loader2,
   ArrowRight,
   FolderOpen,
-  Download
+  Download,
+  Settings
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -141,7 +143,7 @@ export default function App() {
   const [isLoadingSession, setIsLoadingSession] = useState(true);
   
   // UI State
-  const [currentView, setCurrentView] = useState<'dashboard' | 'activities' | 'planning' | 'settings'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'activities' | 'planning' | 'settings' | 'profile'>('dashboard');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [duplicatingTask, setDuplicatingTask] = useState<Task | null>(null);
@@ -167,6 +169,8 @@ export default function App() {
       setLogs(backend.getLogs());
       setSectors(backend.getSectors());
       setProjects(backend.getProjects());
+      // Also ensure current user is up to date if their profile changed
+      if (backend.currentUser) setCurrentUser(backend.currentUser);
     };
 
     backend.initializeData().then(() => {
@@ -337,24 +341,31 @@ export default function App() {
             <CalendarDays size={18} />
             <span>Planejamento</span>
           </button>
-           <button 
-            onClick={() => setCurrentView('settings')}
-            className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg border font-medium transition-all ${currentView === 'settings' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'}`}
-          >
-            <FolderOpen size={18} />
-            <span>Cadastros</span>
-          </button>
+
+          {currentUser.role === 'admin' && (
+             <button 
+              onClick={() => setCurrentView('settings')}
+              className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg border font-medium transition-all ${currentView === 'settings' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'}`}
+            >
+              <FolderOpen size={18} />
+              <span>Cadastros</span>
+            </button>
+          )}
         </nav>
 
         <div className="p-4 border-t border-slate-800">
-          <div className="flex items-center gap-3 mb-4">
-            <img src={currentUser.avatar} className="w-9 h-9 rounded-full border border-slate-600" alt="me" />
-            <div className="overflow-hidden">
+          <div 
+             onClick={() => setCurrentView('profile')}
+             className={`flex items-center gap-3 mb-4 p-2 rounded-lg cursor-pointer transition-colors ${currentView === 'profile' ? 'bg-white/10' : 'hover:bg-white/5'}`}
+          >
+            <img src={currentUser.avatar} className="w-9 h-9 rounded-full border border-slate-600 object-cover" alt="me" />
+            <div className="overflow-hidden flex-1">
               <p className="text-sm font-medium text-white truncate">{currentUser.name}</p>
-              <p className="text-xs text-slate-500 truncate">{currentUser.role}</p>
+              <p className="text-xs text-slate-500 truncate">Editar Perfil</p>
             </div>
+            <Settings size={14} className="text-slate-500" />
           </div>
-          <button onClick={handleLogout} className="flex items-center gap-2 text-xs font-medium text-rose-400 hover:text-rose-300 transition-colors w-full">
+          <button onClick={handleLogout} className="flex items-center gap-2 text-xs font-medium text-rose-400 hover:text-rose-300 transition-colors w-full px-2">
             <LogOut size={14} />
             Sair do sistema
           </button>
@@ -370,6 +381,7 @@ export default function App() {
             {currentView === 'activities' && 'Lista de Atividades'}
             {currentView === 'planning' && 'Agenda Semanal'}
             {currentView === 'settings' && 'Gerenciamento'}
+            {currentView === 'profile' && 'Perfil do Usuário'}
           </h1>
           <div className="flex items-center gap-3">
              {/* Common Actions for Dashboard/Activities */}
@@ -436,6 +448,11 @@ export default function App() {
             {/* VIEW: SETTINGS */}
             {currentView === 'settings' && (
               <SettingsView sectors={sectors} projects={projects} users={users} />
+            )}
+
+            {/* VIEW: PROFILE */}
+            {currentView === 'profile' && (
+              <ProfileView currentUser={currentUser} sectors={sectors} />
             )}
             
           </div>

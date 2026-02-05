@@ -1,3 +1,4 @@
+
 import { supabase } from '../lib/supabaseClient';
 import { Task, User, ActivityLog, Status, Priority, Sector, Project } from '../types';
 
@@ -68,6 +69,47 @@ class SupabaseService {
     this.users = [];
     this.initialized = false;
     this.notify();
+  }
+
+  // --- Profile Management ---
+  async updateProfile(id: string, updates: Partial<User>) {
+    const dbUpdates: any = { };
+    if (updates.name) dbUpdates.name = updates.name;
+    if (updates.avatar) dbUpdates.avatar = updates.avatar;
+    if (updates.sector) dbUpdates.sector = updates.sector;
+
+    const { error } = await supabase.from('profiles').update(dbUpdates).eq('id', id);
+    
+    if (error) throw new Error(error.message);
+
+    // Update Local State
+    if (this.currentUser && this.currentUser.id === id) {
+        this.currentUser = { ...this.currentUser, ...updates };
+    }
+    
+    await this.fetchUsers(); // Refresh all users list
+    this.notify();
+  }
+
+  async changePassword(oldPassword: string, newPassword: string) {
+     if (!this.currentUser) throw new Error("Usuário não autenticado.");
+
+     // 1. Verify Old Password by trying to Sign In (Re-auth)
+     const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: this.currentUser.email,
+        password: oldPassword
+     });
+
+     if (signInError) {
+        throw new Error("A senha atual está incorreta.");
+     }
+
+     // 2. Update Password
+     const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+
+     if (updateError) {
+        throw new Error(updateError.message);
+     }
   }
 
   // --- Initialization & Realtime ---

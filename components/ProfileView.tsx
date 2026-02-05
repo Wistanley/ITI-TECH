@@ -1,0 +1,310 @@
+
+import React, { useState } from 'react';
+import { User, Sector } from '../types';
+import { backend } from '../services/supabaseBackend';
+import { UserCog, Save, Loader2, KeyRound, ShieldCheck, Mail, Link as LinkIcon, Lock } from 'lucide-react';
+import { motion } from 'framer-motion';
+
+interface Props {
+  currentUser: User;
+  sectors: Sector[];
+}
+
+export const ProfileView: React.FC<Props> = ({ currentUser, sectors }) => {
+  const [activeTab, setActiveTab] = useState<'info' | 'security'>('info');
+
+  // Profile Form State
+  const [profileForm, setProfileForm] = useState({
+    name: currentUser.name,
+    avatar: currentUser.avatar,
+    sector: currentUser.sector
+  });
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileMessage, setProfileMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
+
+  // Password Form State
+  const [passwordForm, setPasswordForm] = useState({
+    oldPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+  const [pwdLoading, setPwdLoading] = useState(false);
+  const [pwdMessage, setPwdMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
+
+  const handleProfileSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProfileLoading(true);
+    setProfileMessage(null);
+
+    try {
+      await backend.updateProfile(currentUser.id, {
+         name: profileForm.name,
+         avatar: profileForm.avatar,
+         sector: profileForm.sector
+      });
+      setProfileMessage({ type: 'success', text: 'Perfil atualizado com sucesso!' });
+    } catch (err: any) {
+      setProfileMessage({ type: 'error', text: err.message || 'Erro ao atualizar perfil.' });
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPwdMessage({ type: 'error', text: 'As novas senhas não coincidem.' });
+      return;
+    }
+    if (passwordForm.newPassword.length < 6) {
+      setPwdMessage({ type: 'error', text: 'A senha deve ter no mínimo 6 caracteres.' });
+      return;
+    }
+
+    setPwdLoading(true);
+    setPwdMessage(null);
+
+    try {
+      await backend.changePassword(passwordForm.oldPassword, passwordForm.newPassword);
+      setPwdMessage({ type: 'success', text: 'Senha alterada com sucesso!' });
+      setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
+    } catch (err: any) {
+      setPwdMessage({ type: 'error', text: err.message || 'Erro ao alterar senha. Verifique sua senha atual.' });
+    } finally {
+      setPwdLoading(false);
+    }
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="p-8 h-full overflow-y-auto custom-scrollbar"
+    >
+      <header className="mb-8">
+        <h2 className="text-2xl font-bold text-white flex items-center gap-3">
+          <UserCog className="text-primary" size={28} />
+          Meu Perfil
+        </h2>
+        <p className="text-slate-400 mt-2">Gerencie suas informações pessoais e credenciais de acesso.</p>
+      </header>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 max-w-6xl">
+        
+        {/* --- Left Column: Identity Card --- */}
+        <div className="xl:col-span-1">
+          <div className="bg-navy-800/50 border border-slate-700 rounded-2xl p-6 shadow-xl text-center relative overflow-hidden">
+             <div className="absolute top-0 left-0 w-full h-24 bg-gradient-to-br from-blue-600/20 to-cyan-500/20 z-0"></div>
+             
+             <div className="relative z-10 mt-8 mb-4">
+               <img 
+                 src={profileForm.avatar} 
+                 alt="Avatar" 
+                 className="w-32 h-32 rounded-full border-4 border-navy-800 shadow-2xl mx-auto object-cover bg-navy-900"
+                 onError={(e) => { e.currentTarget.src = 'https://ui-avatars.com/api/?name=User'; }}
+               />
+             </div>
+             
+             <h3 className="text-xl font-bold text-white relative z-10">{currentUser.name}</h3>
+             <p className="text-slate-400 text-sm mb-6 relative z-10">{currentUser.email}</p>
+
+             <div className="flex flex-col gap-2">
+               <div className="bg-navy-900/50 p-3 rounded-xl border border-slate-700/50 flex items-center gap-3">
+                 <ShieldCheck className="text-emerald-400" size={18} />
+                 <div className="text-left">
+                    <p className="text-[10px] text-slate-500 uppercase font-bold">Permissão</p>
+                    <p className="text-sm text-slate-200 capitalize">{currentUser.role === 'admin' ? 'Administrador' : 'Colaborador'}</p>
+                 </div>
+               </div>
+               <div className="bg-navy-900/50 p-3 rounded-xl border border-slate-700/50 flex items-center gap-3">
+                 <UserCog className="text-blue-400" size={18} />
+                 <div className="text-left">
+                    <p className="text-[10px] text-slate-500 uppercase font-bold">Setor Atual</p>
+                    <p className="text-sm text-slate-200">{currentUser.sector}</p>
+                 </div>
+               </div>
+             </div>
+          </div>
+        </div>
+
+        {/* --- Right Column: Forms --- */}
+        <div className="xl:col-span-2 space-y-6">
+          
+          {/* Tabs */}
+          <div className="flex gap-4 border-b border-slate-800 pb-1">
+            <button
+               onClick={() => setActiveTab('info')}
+               className={`pb-3 px-2 text-sm font-medium transition-all relative ${activeTab === 'info' ? 'text-primary' : 'text-slate-400 hover:text-white'}`}
+            >
+               Informações Pessoais
+               {activeTab === 'info' && <motion.div layoutId="underline" className="absolute bottom-0 left-0 w-full h-0.5 bg-primary" />}
+            </button>
+             <button
+               onClick={() => setActiveTab('security')}
+               className={`pb-3 px-2 text-sm font-medium transition-all relative ${activeTab === 'security' ? 'text-primary' : 'text-slate-400 hover:text-white'}`}
+            >
+               Segurança e Senha
+               {activeTab === 'security' && <motion.div layoutId="underline" className="absolute bottom-0 left-0 w-full h-0.5 bg-primary" />}
+            </button>
+          </div>
+
+          {/* Form: Personal Info */}
+          {activeTab === 'info' && (
+            <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }}>
+              <form onSubmit={handleProfileSubmit} className="bg-navy-800/50 border border-slate-700 rounded-xl p-6 shadow-lg">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-slate-400 mb-1.5">Nome Completo</label>
+                    <div className="relative">
+                      <UserCog className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                      <input 
+                        type="text" 
+                        value={profileForm.name}
+                        onChange={e => setProfileForm({...profileForm, name: e.target.value})}
+                        className="w-full bg-navy-900 border border-slate-700 text-white rounded-lg pl-10 pr-4 py-2.5 focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-slate-400 mb-1.5">URL do Avatar</label>
+                    <div className="relative">
+                      <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                      <input 
+                        type="text" 
+                        value={profileForm.avatar}
+                        onChange={e => setProfileForm({...profileForm, avatar: e.target.value})}
+                        className="w-full bg-navy-900 border border-slate-700 text-white rounded-lg pl-10 pr-4 py-2.5 focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+                      />
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1">Cole o link de uma imagem (ex: GitHub, Imgur).</p>
+                  </div>
+
+                  <div>
+                     <label className="block text-sm font-medium text-slate-400 mb-1.5">Email</label>
+                     <div className="relative opacity-60 cursor-not-allowed">
+                       <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                       <input 
+                         type="email" 
+                         disabled
+                         value={currentUser.email}
+                         className="w-full bg-navy-900 border border-slate-700 text-slate-300 rounded-lg pl-10 pr-4 py-2.5 outline-none cursor-not-allowed"
+                       />
+                     </div>
+                     <p className="text-[10px] text-slate-500 mt-1">O email não pode ser alterado manualmente.</p>
+                  </div>
+
+                  <div>
+                     <label className="block text-sm font-medium text-slate-400 mb-1.5">Setor</label>
+                     <select
+                        value={profileForm.sector}
+                        onChange={e => setProfileForm({...profileForm, sector: e.target.value})}
+                        className="w-full bg-navy-900 border border-slate-700 text-white rounded-lg px-4 py-2.5 focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+                     >
+                       <option value="">Selecione...</option>
+                       {sectors.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                     </select>
+                  </div>
+                </div>
+
+                {profileMessage && (
+                  <div className={`mb-4 p-3 rounded-lg text-sm flex items-center gap-2 ${profileMessage.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+                    <span className={`w-2 h-2 rounded-full ${profileMessage.type === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
+                    {profileMessage.text}
+                  </div>
+                )}
+
+                <div className="flex justify-end">
+                   <button 
+                     type="submit"
+                     disabled={profileLoading}
+                     className="bg-primary hover:bg-sky-400 text-white px-6 py-2 rounded-lg font-medium shadow-lg shadow-sky-500/20 transition-all flex items-center gap-2 disabled:opacity-50"
+                   >
+                     {profileLoading ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+                     Salvar Alterações
+                   </button>
+                </div>
+              </form>
+            </motion.div>
+          )}
+
+          {/* Form: Security */}
+          {activeTab === 'security' && (
+             <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }}>
+               <form onSubmit={handlePasswordSubmit} className="bg-navy-800/50 border border-slate-700 rounded-xl p-6 shadow-lg">
+                 <div className="space-y-4 mb-6">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-400 mb-1.5">Senha Atual</label>
+                      <div className="relative">
+                        <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                        <input 
+                          type="password" 
+                          required
+                          value={passwordForm.oldPassword}
+                          onChange={e => setPasswordForm({...passwordForm, oldPassword: e.target.value})}
+                          className="w-full bg-navy-900 border border-slate-700 text-white rounded-lg pl-10 pr-4 py-2.5 focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+                          placeholder="Digite sua senha antiga para confirmar"
+                        />
+                      </div>
+                    </div>
+                    
+                    <hr className="border-slate-800 my-4" />
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-400 mb-1.5">Nova Senha</label>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                        <input 
+                          type="password" 
+                          required
+                          value={passwordForm.newPassword}
+                          onChange={e => setPasswordForm({...passwordForm, newPassword: e.target.value})}
+                          className="w-full bg-navy-900 border border-slate-700 text-white rounded-lg pl-10 pr-4 py-2.5 focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+                          placeholder="Mínimo 6 caracteres"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-400 mb-1.5">Confirmar Nova Senha</label>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                        <input 
+                          type="password" 
+                          required
+                          value={passwordForm.confirmPassword}
+                          onChange={e => setPasswordForm({...passwordForm, confirmPassword: e.target.value})}
+                          className="w-full bg-navy-900 border border-slate-700 text-white rounded-lg pl-10 pr-4 py-2.5 focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+                          placeholder="Repita a nova senha"
+                        />
+                      </div>
+                    </div>
+                 </div>
+
+                 {pwdMessage && (
+                  <div className={`mb-4 p-3 rounded-lg text-sm flex items-center gap-2 ${pwdMessage.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+                    <span className={`w-2 h-2 rounded-full ${pwdMessage.type === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
+                    {pwdMessage.text}
+                  </div>
+                )}
+
+                 <div className="flex justify-end">
+                   <button 
+                     type="submit"
+                     disabled={pwdLoading}
+                     className="bg-rose-600 hover:bg-rose-500 text-white px-6 py-2 rounded-lg font-medium shadow-lg shadow-rose-500/20 transition-all flex items-center gap-2 disabled:opacity-50"
+                   >
+                     {pwdLoading ? <Loader2 className="animate-spin" size={18} /> : <ShieldCheck size={18} />}
+                     Redefinir Senha
+                   </button>
+                </div>
+               </form>
+             </motion.div>
+          )}
+
+        </div>
+      </div>
+    </motion.div>
+  );
+};
