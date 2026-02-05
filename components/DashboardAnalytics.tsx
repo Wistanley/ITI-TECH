@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import { Task, Project, Status, User } from '../types';
 import { PieChart, BarChart3, TrendingUp, CheckCircle2, Users, Clock } from 'lucide-react';
@@ -105,29 +106,29 @@ export const DashboardAnalytics: React.FC<Props> = ({ tasks, projects, users }) 
   if (tasks.length === 0) return null;
 
   return (
-    <div className="space-y-6 mb-8">
+    <div className="flex flex-col gap-4 md:gap-6 mb-8 w-full">
       {/* Row 1: Projects & Status */}
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="grid grid-cols-1 lg:grid-cols-3 gap-6"
+        className="grid grid-cols-1 xl:grid-cols-3 gap-4 md:gap-6"
       >
         {/* --- Card 1: Hours by Project (Bar Chart) --- */}
-        <div className="lg:col-span-2 bg-navy-800/50 border border-slate-700/50 rounded-xl p-5 shadow-lg backdrop-blur-sm">
+        <div className="xl:col-span-2 bg-navy-800/50 border border-slate-700/50 rounded-xl p-4 sm:p-6 shadow-lg backdrop-blur-sm">
           <div className="flex items-center gap-2 mb-4">
             <BarChart3 className="text-primary" size={20} />
             <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wide">Horas por Projeto</h3>
           </div>
           
-          <div className="space-y-3">
+          <div className="space-y-4">
             {projectStats.data.length > 0 ? (
               projectStats.data.map((item, index) => (
                 <div key={index} className="group">
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="text-slate-300 font-medium truncate max-w-[200px]">{item.name}</span>
-                    <span className="text-slate-400 font-mono">{item.formatted}</span>
+                  <div className="flex justify-between items-end text-xs mb-1.5 gap-2">
+                    <span className="text-slate-300 font-medium truncate max-w-[70%]">{item.name}</span>
+                    <span className="text-slate-400 font-mono whitespace-nowrap">{item.formatted}</span>
                   </div>
-                  <div className="w-full bg-navy-900 rounded-full h-2 overflow-hidden">
+                  <div className="w-full bg-navy-900 rounded-full h-2.5 overflow-hidden">
                     <motion.div 
                       initial={{ width: 0 }}
                       animate={{ width: `${(item.minutes / projectStats.max) * 100}%` }}
@@ -146,60 +147,62 @@ export const DashboardAnalytics: React.FC<Props> = ({ tasks, projects, users }) 
         </div>
 
         {/* --- Card 2: Completion Rate (Donut Chart) --- */}
-        <div className="bg-navy-800/50 border border-slate-700/50 rounded-xl p-5 shadow-lg backdrop-blur-sm flex flex-col items-center justify-center relative overflow-hidden">
+        <div className="bg-navy-800/50 border border-slate-700/50 rounded-xl p-4 sm:p-6 shadow-lg backdrop-blur-sm flex flex-col items-center justify-center relative overflow-hidden min-h-[280px] xl:min-h-0">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-emerald-300"></div>
           
-          <div className="flex items-center gap-2 mb-2 w-full">
+          <div className="flex items-center gap-2 mb-4 w-full">
              <PieChart className="text-emerald-400" size={20} />
              <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wide">Taxa de Entrega</h3>
           </div>
 
-          <div className="relative w-40 h-40 mt-2">
-            {/* SVG Donut */}
-            <svg className="w-full h-full transform -rotate-90">
-              {/* Background Circle */}
-              <circle
-                cx="50%"
-                cy="50%"
-                r={radius}
-                stroke="currentColor"
-                strokeWidth="8"
-                fill="transparent"
-                className="text-navy-900"
-              />
-              {/* Progress Circle */}
-              <motion.circle
-                initial={{ strokeDashoffset: circumference }}
-                animate={{ strokeDashoffset }}
-                transition={{ duration: 1.5, ease: "easeInOut" }}
-                cx="50%"
-                cy="50%"
-                r={radius}
-                stroke="currentColor"
-                strokeWidth="8"
-                fill="transparent"
-                strokeDasharray={circumference}
-                strokeLinecap="round"
-                className="text-emerald-500 drop-shadow-[0_0_10px_rgba(16,185,129,0.4)]"
-              />
-            </svg>
-            
-            {/* Center Text */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
-              <span className="text-3xl font-bold tracking-tighter">{statusStats.percent}%</span>
-              <span className="text-[10px] text-slate-400 uppercase font-medium">Concluído</span>
+          <div className="flex flex-col items-center justify-center flex-1 w-full">
+            <div className="relative w-36 h-36 sm:w-40 sm:h-40">
+              {/* SVG Donut */}
+              <svg className="w-full h-full transform -rotate-90">
+                {/* Background Circle */}
+                <circle
+                  cx="50%"
+                  cy="50%"
+                  r={radius}
+                  stroke="currentColor"
+                  strokeWidth="8"
+                  fill="transparent"
+                  className="text-navy-900"
+                />
+                {/* Progress Circle */}
+                <motion.circle
+                  initial={{ strokeDashoffset: circumference }}
+                  animate={{ strokeDashoffset }}
+                  transition={{ duration: 1.5, ease: "easeInOut" }}
+                  cx="50%"
+                  cy="50%"
+                  r={radius}
+                  stroke="currentColor"
+                  strokeWidth="8"
+                  fill="transparent"
+                  strokeDasharray={circumference}
+                  strokeLinecap="round"
+                  className="text-emerald-500 drop-shadow-[0_0_10px_rgba(16,185,129,0.4)]"
+                />
+              </svg>
+              
+              {/* Center Text */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
+                <span className="text-2xl sm:text-3xl font-bold tracking-tighter">{statusStats.percent}%</span>
+                <span className="text-[10px] text-slate-400 uppercase font-medium">Concluído</span>
+              </div>
             </div>
-          </div>
 
-          <div className="w-full mt-4 grid grid-cols-2 gap-2 text-center">
-              <div className="bg-navy-900/50 rounded p-2 border border-slate-800">
-                 <span className="block text-lg font-bold text-emerald-400">{statusStats.completed}</span>
-                 <span className="text-[10px] text-slate-500 uppercase">Entregues</span>
-              </div>
-              <div className="bg-navy-900/50 rounded p-2 border border-slate-800">
-                 <span className="block text-lg font-bold text-blue-400">{statusStats.pending}</span>
-                 <span className="text-[10px] text-slate-500 uppercase">Pendentes</span>
-              </div>
+            <div className="w-full mt-6 grid grid-cols-2 gap-3 text-center">
+                <div className="bg-navy-900/50 rounded-lg p-3 border border-slate-800">
+                   <span className="block text-xl font-bold text-emerald-400">{statusStats.completed}</span>
+                   <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Entregues</span>
+                </div>
+                <div className="bg-navy-900/50 rounded-lg p-3 border border-slate-800">
+                   <span className="block text-xl font-bold text-blue-400">{statusStats.pending}</span>
+                   <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Pendentes</span>
+                </div>
+            </div>
           </div>
         </div>
       </motion.div>
@@ -209,33 +212,33 @@ export const DashboardAnalytics: React.FC<Props> = ({ tasks, projects, users }) 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="bg-navy-800/50 border border-slate-700/50 rounded-xl p-5 shadow-lg backdrop-blur-sm"
+        className="bg-navy-800/50 border border-slate-700/50 rounded-xl p-4 sm:p-6 shadow-lg backdrop-blur-sm"
       >
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-2">
            <div className="flex items-center gap-2">
               <Users className="text-primary" size={20} />
               <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wide">Carga Horária Semanal (Máx: 44h)</h3>
            </div>
-           <div className="flex items-center gap-3 text-xs text-slate-500">
-              <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-500"></div>Normal</div>
-              <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-amber-500"></div>Atenção</div>
-              <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-rose-500"></div>Hora Extra</div>
+           <div className="flex items-center gap-3 text-[10px] sm:text-xs text-slate-500 font-medium">
+              <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-blue-500"></div>Normal</div>
+              <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-amber-500"></div>Atenção</div>
+              <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-rose-500"></div>Hora Extra</div>
            </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
           {collaboratorStats.data.map((user) => (
-             <div key={user.id} className="flex items-center gap-3 group p-2 rounded-lg hover:bg-white/5 transition-colors">
-                <img src={user.avatar} className="w-10 h-10 rounded-full border border-slate-700" alt={user.name} />
+             <div key={user.id} className="flex items-center gap-3 group p-3 rounded-xl bg-navy-900/30 hover:bg-navy-900/60 transition-colors border border-transparent hover:border-slate-800">
+                <img src={user.avatar} className="w-10 h-10 rounded-full border border-slate-700 object-cover bg-navy-950" alt={user.name} />
                 <div className="flex-1 min-w-0">
-                   <div className="flex justify-between items-end mb-1">
-                      <span className="text-sm font-medium text-slate-200 truncate">{user.name}</span>
-                      <span className={`text-xs font-mono font-bold ${user.minutes > (44*60) ? 'text-rose-400' : 'text-slate-400'}`}>
+                   <div className="flex justify-between items-end mb-1.5">
+                      <span className="text-sm font-medium text-slate-200 truncate pr-2">{user.name}</span>
+                      <span className={`text-xs font-mono font-bold whitespace-nowrap ${user.minutes > (44*60) ? 'text-rose-400' : 'text-slate-400'}`}>
                         {user.formatted}
                       </span>
                    </div>
                    
-                   <div className="relative w-full h-2.5 bg-navy-900 rounded-full overflow-hidden border border-slate-800">
+                   <div className="relative w-full h-2 bg-navy-950 rounded-full overflow-hidden border border-slate-800/50">
                       {/* Grid Lines for visual context (0, 22, 44) */}
                       <div className="absolute top-0 bottom-0 left-1/2 w-px bg-slate-800/50 z-10"></div>
                       

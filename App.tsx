@@ -373,7 +373,7 @@ export default function App() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
         {/* Top Header */}
-        <header className="h-16 border-b border-slate-800 bg-navy-900/80 backdrop-blur-md flex items-center justify-between px-6 z-20">
+        <header className="h-16 border-b border-slate-800 bg-navy-900/80 backdrop-blur-md flex items-center justify-between px-4 md:px-6 z-20">
           <h1 className="text-lg font-semibold text-white">
             {currentView === 'dashboard' && 'Visão Geral (Analytics)'}
             {currentView === 'activities' && 'Lista de Atividades'}
@@ -415,7 +415,7 @@ export default function App() {
         </header>
 
         {/* Dynamic Body */}
-        <div className="flex-1 p-6 overflow-hidden flex gap-6">
+        <div className="flex-1 p-4 md:p-6 overflow-hidden flex gap-4 md:gap-6">
           
           {/* Main View Container */}
           <div className="flex-1 flex flex-col min-w-0 overflow-y-auto custom-scrollbar">
