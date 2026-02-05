@@ -342,15 +342,13 @@ export default function App() {
             <span>Planejamento</span>
           </button>
 
-          {currentUser.role === 'admin' && (
-             <button 
-              onClick={() => setCurrentView('settings')}
-              className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg border font-medium transition-all ${currentView === 'settings' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'}`}
-            >
-              <FolderOpen size={18} />
-              <span>Cadastros</span>
-            </button>
-          )}
+           <button 
+            onClick={() => setCurrentView('settings')}
+            className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg border font-medium transition-all ${currentView === 'settings' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'}`}
+          >
+            <FolderOpen size={18} />
+            <span>Cadastros</span>
+          </button>
         </nav>
 
         <div className="p-4 border-t border-slate-800">
