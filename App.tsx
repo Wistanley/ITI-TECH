@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 // SWITCH TO REAL BACKEND
 import { backend } from './services/supabaseBackend'; 
-import { Task, User, ActivityLog, Status, Sector, Project } from './types';
+import { Task, User, ActivityLog, Status, Sector, Project, SystemSettings } from './types';
 import { ActivityLogWidget } from './components/ActivityLogWidget';
 import { TaskModal } from './components/TaskModal';
 import { SettingsView } from './components/SettingsView';
@@ -27,7 +27,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 
 // --- Login Screen Component ---
-const LoginScreen: React.FC<{ onLogin: (user: User) => void }> = ({ onLogin }) => {
+const LoginScreen: React.FC<{ onLogin: (user: User) => void; settings: SystemSettings }> = ({ onLogin, settings }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -58,10 +58,15 @@ const LoginScreen: React.FC<{ onLogin: (user: User) => void }> = ({ onLogin }) =
       
       <div className="bg-navy-800/80 backdrop-blur-xl p-8 rounded-2xl border border-white/5 shadow-2xl w-full max-w-md z-10 relative">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 mb-4 shadow-lg shadow-blue-500/20">
-            <LayoutDashboard className="text-white" size={24} />
-          </div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">ITI TECH</h1>
+           {/* Dynamic Logo in Login */}
+           {settings.logoUrl ? (
+             <img src={settings.logoUrl} alt="Logo" className="h-16 w-auto mx-auto mb-4 drop-shadow-[0_0_15px_rgba(14,165,233,0.3)]" />
+           ) : (
+             <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 mb-4 shadow-lg shadow-blue-500/20">
+               <LayoutDashboard className="text-white" size={24} />
+             </div>
+           )}
+          <h1 className="text-3xl font-bold text-white tracking-tight">{settings.logoUrl ? '' : 'ITI TECH'}</h1>
           <p className="text-slate-400 mt-2">Acesse sua conta</p>
         </div>
 
@@ -141,6 +146,7 @@ export default function App() {
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoadingSession, setIsLoadingSession] = useState(true);
+  const [settings, setSettings] = useState<SystemSettings>({ logoUrl: null, faviconUrl: null });
   
   // UI State
   const [currentView, setCurrentView] = useState<'dashboard' | 'activities' | 'planning' | 'settings' | 'profile'>('dashboard');
@@ -161,14 +167,15 @@ export default function App() {
   // 2. Load Data Subscription
   useEffect(() => {
     // Only subscribe if logged in
-    if (!currentUser) return;
-
+    // Note: We might want settings even if not logged in for the login screen logo
+    
     const refreshData = () => {
       setUsers(backend.getUsers());
       setTasks(backend.getTasks());
       setLogs(backend.getLogs());
       setSectors(backend.getSectors());
       setProjects(backend.getProjects());
+      setSettings(backend.getSettings());
       // Also ensure current user is up to date if their profile changed
       if (backend.currentUser) setCurrentUser(backend.currentUser);
     };
@@ -182,7 +189,21 @@ export default function App() {
     });
 
     return () => unsubscribe();
-  }, [currentUser]);
+  }, [currentUser]); // Refresh when user state changes (login/logout) to ensure data refetch
+
+  // 3. Update Favicon dynamically
+  useEffect(() => {
+    if (settings.faviconUrl) {
+      let link: HTMLLinkElement | null = document.querySelector("link[rel*='icon']");
+      if (!link) {
+        link = document.createElement('link');
+        link.type = 'image/x-icon';
+        link.rel = 'shortcut icon';
+        document.getElementsByTagName('head')[0].appendChild(link);
+      }
+      link.href = settings.faviconUrl;
+    }
+  }, [settings.faviconUrl]);
 
   const handleLoginSuccess = (user: User) => {
     setCurrentUser(user);
@@ -289,7 +310,7 @@ export default function App() {
   }
 
   if (!currentUser) {
-    return <LoginScreen onLogin={handleLoginSuccess} />;
+    return <LoginScreen onLogin={handleLoginSuccess} settings={settings} />;
   }
 
   return (
@@ -298,10 +319,15 @@ export default function App() {
       {/* Sidebar */}
       <aside className="w-64 bg-navy-900 border-r border-slate-800 flex flex-col hidden md:flex">
         <div className="p-6 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
-            <LayoutDashboard className="text-white" size={18} />
-          </div>
-          <span className="font-bold text-lg tracking-tight text-white">ITI TECH</span>
+          {/* Dynamic Logo in Sidebar */}
+          {settings.logoUrl ? (
+             <img src={settings.logoUrl} alt="Logo" className="h-8 w-auto max-w-[150px] object-contain" />
+          ) : (
+             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
+               <LayoutDashboard className="text-white" size={18} />
+             </div>
+          )}
+          {!settings.logoUrl && <span className="font-bold text-lg tracking-tight text-white">ITI TECH</span>}
         </div>
 
         <div className="px-4 py-2">
@@ -431,49 +457,4 @@ export default function App() {
                 tasks={tasks}
                 projects={projects}
                 users={users}
-                currentUser={currentUser}
-                onEdit={handleEdit}
-                onDuplicate={handleDuplicate}
-                onDelete={handleDelete}
-              />
-            )}
-
-            {/* VIEW: PLANNING */}
-            {currentView === 'planning' && (
-              <WeeklyPlanningView tasks={tasks} projects={projects} currentUser={currentUser} />
-            )}
-
-            {/* VIEW: SETTINGS */}
-            {currentView === 'settings' && (
-              <SettingsView sectors={sectors} projects={projects} users={users} />
-            )}
-
-            {/* VIEW: PROFILE */}
-            {currentView === 'profile' && (
-              <ProfileView currentUser={currentUser} sectors={sectors} />
-            )}
-            
-          </div>
-
-          {/* Right Column: Activity Log Widget (Visible on Dashboard and Activities) */}
-          {(currentView === 'dashboard' || currentView === 'activities') && (
-            <div className="w-80 hidden xl:block">
-              <ActivityLogWidget logs={logs} users={users} />
-            </div>
-          )}
-
-        </div>
-      </main>
-
-      <TaskModal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
-        taskToEdit={editingTask}
-        initialData={duplicatingTask}
-        projects={projects}
-        sectors={sectors}
-        users={users}
-      />
-    </div>
-  );
-}
+                currentUser

@@ -2,7 +2,7 @@
 import React, { useState, useRef } from 'react';
 import { User, Sector } from '../types';
 import { backend } from '../services/supabaseBackend';
-import { UserCog, Save, Loader2, KeyRound, ShieldCheck, Mail, Camera, Lock } from 'lucide-react';
+import { UserCog, Save, Loader2, KeyRound, ShieldCheck, Mail, Camera, Lock, Palette, Upload, Image as ImageIcon } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface Props {
@@ -11,7 +11,7 @@ interface Props {
 }
 
 export const ProfileView: React.FC<Props> = ({ currentUser, sectors }) => {
-  const [activeTab, setActiveTab] = useState<'info' | 'security'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'security' | 'customization'>('info');
 
   // Profile Form State
   const [profileForm, setProfileForm] = useState({
@@ -32,6 +32,12 @@ export const ProfileView: React.FC<Props> = ({ currentUser, sectors }) => {
   });
   const [pwdLoading, setPwdLoading] = useState(false);
   const [pwdMessage, setPwdMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
+
+  // Customization Form State
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [faviconFile, setFaviconFile] = useState<File | null>(null);
+  const [customLoading, setCustomLoading] = useState(false);
+  const [customMessage, setCustomMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -101,6 +107,37 @@ export const ProfileView: React.FC<Props> = ({ currentUser, sectors }) => {
       setPwdMessage({ type: 'error', text: err.message || 'Erro ao alterar senha. Verifique sua senha atual.' });
     } finally {
       setPwdLoading(false);
+    }
+  };
+
+  const handleCustomizationSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!logoFile && !faviconFile) {
+       setCustomMessage({ type: 'error', text: 'Selecione pelo menos um arquivo para enviar.' });
+       return;
+    }
+
+    setCustomLoading(true);
+    setCustomMessage(null);
+
+    try {
+      if (logoFile) {
+        await backend.uploadSystemAsset(logoFile, 'logo');
+      }
+      if (faviconFile) {
+        await backend.uploadSystemAsset(faviconFile, 'favicon');
+      }
+      setCustomMessage({ type: 'success', text: 'Identidade visual atualizada com sucesso!' });
+      setLogoFile(null);
+      setFaviconFile(null);
+    } catch (err: any) {
+      let msg = err.message || 'Erro ao atualizar identidade.';
+      if (msg.includes('row-level security')) {
+         msg = 'Erro de Permissão: Verifique as políticas do bucket "images".';
+      }
+      setCustomMessage({ type: 'error', text: msg });
+    } finally {
+      setCustomLoading(false);
     }
   };
 
@@ -174,20 +211,27 @@ export const ProfileView: React.FC<Props> = ({ currentUser, sectors }) => {
         <div className="xl:col-span-2 space-y-6">
           
           {/* Tabs */}
-          <div className="flex gap-4 border-b border-slate-800 pb-1">
+          <div className="flex gap-4 border-b border-slate-800 pb-1 overflow-x-auto">
             <button
                onClick={() => setActiveTab('info')}
-               className={`pb-3 px-2 text-sm font-medium transition-all relative ${activeTab === 'info' ? 'text-primary' : 'text-slate-400 hover:text-white'}`}
+               className={`pb-3 px-2 text-sm font-medium transition-all relative whitespace-nowrap ${activeTab === 'info' ? 'text-primary' : 'text-slate-400 hover:text-white'}`}
             >
                Informações Pessoais
                {activeTab === 'info' && <motion.div layoutId="underline" className="absolute bottom-0 left-0 w-full h-0.5 bg-primary" />}
             </button>
              <button
                onClick={() => setActiveTab('security')}
-               className={`pb-3 px-2 text-sm font-medium transition-all relative ${activeTab === 'security' ? 'text-primary' : 'text-slate-400 hover:text-white'}`}
+               className={`pb-3 px-2 text-sm font-medium transition-all relative whitespace-nowrap ${activeTab === 'security' ? 'text-primary' : 'text-slate-400 hover:text-white'}`}
             >
                Segurança e Senha
                {activeTab === 'security' && <motion.div layoutId="underline" className="absolute bottom-0 left-0 w-full h-0.5 bg-primary" />}
+            </button>
+            <button
+               onClick={() => setActiveTab('customization')}
+               className={`pb-3 px-2 text-sm font-medium transition-all relative whitespace-nowrap ${activeTab === 'customization' ? 'text-primary' : 'text-slate-400 hover:text-white'}`}
+            >
+               Personalização (Logo)
+               {activeTab === 'customization' && <motion.div layoutId="underline" className="absolute bottom-0 left-0 w-full h-0.5 bg-primary" />}
             </button>
           </div>
 
@@ -325,6 +369,109 @@ export const ProfileView: React.FC<Props> = ({ currentUser, sectors }) => {
                    >
                      {pwdLoading ? <Loader2 className="animate-spin" size={18} /> : <ShieldCheck size={18} />}
                      Redefinir Senha
+                   </button>
+                </div>
+               </form>
+             </motion.div>
+          )}
+
+          {/* Form: Customization */}
+          {activeTab === 'customization' && (
+             <motion.div initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }}>
+               <form onSubmit={handleCustomizationSubmit} className="bg-navy-800/50 border border-slate-700 rounded-xl p-6 shadow-lg">
+                 <div className="bg-blue-500/5 border border-blue-500/10 p-4 rounded-lg mb-6 flex items-start gap-3">
+                    <Palette className="text-blue-400 shrink-0 mt-1" size={18} />
+                    <div className="text-sm text-slate-300">
+                       <p className="font-medium text-white mb-1">Identidade Visual do Sistema</p>
+                       <p className="text-xs text-slate-400">As alterações feitas aqui serão visíveis para <strong>todos os usuários</strong> da plataforma. Use imagens com fundo transparente (PNG) para a logo.</p>
+                    </div>
+                 </div>
+
+                 <div className="grid grid-cols-1 gap-6 mb-6">
+                    {/* Logo Upload */}
+                    <div>
+                       <label className="block text-sm font-medium text-slate-400 mb-2">Logo do Sistema (Sidebar)</label>
+                       <div className="flex items-center gap-4">
+                          <div className="w-16 h-16 bg-navy-900 border border-dashed border-slate-600 rounded-lg flex items-center justify-center overflow-hidden">
+                             {logoFile ? (
+                               <img src={URL.createObjectURL(logoFile)} className="w-full h-full object-contain p-1" />
+                             ) : backend.settings.logoUrl ? (
+                               <img src={backend.settings.logoUrl} className="w-full h-full object-contain p-1" />
+                             ) : (
+                               <ImageIcon className="text-slate-600" />
+                             )}
+                          </div>
+                          <div className="flex-1">
+                             <input 
+                               type="file" 
+                               accept="image/png, image/jpeg, image/svg+xml"
+                               id="logo-upload"
+                               className="hidden"
+                               onChange={(e) => e.target.files && setLogoFile(e.target.files[0])}
+                             />
+                             <label 
+                               htmlFor="logo-upload"
+                               className="cursor-pointer inline-flex items-center gap-2 bg-navy-900 border border-slate-700 hover:bg-navy-700 text-slate-300 px-4 py-2 rounded-lg text-sm transition-colors"
+                             >
+                               <Upload size={14} />
+                               Selecionar Imagem (PNG/SVG)
+                             </label>
+                             <p className="text-[10px] text-slate-500 mt-1.5 ml-1">Recomendado: 200x200px (Fundo Transparente)</p>
+                          </div>
+                       </div>
+                    </div>
+                    
+                    <hr className="border-slate-800" />
+
+                    {/* Favicon Upload */}
+                    <div>
+                       <label className="block text-sm font-medium text-slate-400 mb-2">Favicon (Ícone do Navegador)</label>
+                       <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 bg-navy-900 border border-dashed border-slate-600 rounded-lg flex items-center justify-center overflow-hidden">
+                             {faviconFile ? (
+                               <img src={URL.createObjectURL(faviconFile)} className="w-8 h-8 object-contain" />
+                             ) : backend.settings.faviconUrl ? (
+                               <img src={backend.settings.faviconUrl} className="w-8 h-8 object-contain" />
+                             ) : (
+                               <ImageIcon className="text-slate-600" size={20} />
+                             )}
+                          </div>
+                          <div className="flex-1">
+                             <input 
+                               type="file" 
+                               accept="image/x-icon, image/png"
+                               id="favicon-upload"
+                               className="hidden"
+                               onChange={(e) => e.target.files && setFaviconFile(e.target.files[0])}
+                             />
+                             <label 
+                               htmlFor="favicon-upload"
+                               className="cursor-pointer inline-flex items-center gap-2 bg-navy-900 border border-slate-700 hover:bg-navy-700 text-slate-300 px-4 py-2 rounded-lg text-sm transition-colors"
+                             >
+                               <Upload size={14} />
+                               Selecionar Ícone (.ico / .png)
+                             </label>
+                             <p className="text-[10px] text-slate-500 mt-1.5 ml-1">Recomendado: 32x32px ou 64x64px</p>
+                          </div>
+                       </div>
+                    </div>
+                 </div>
+
+                 {customMessage && (
+                  <div className={`mb-4 p-3 rounded-lg text-sm flex items-center gap-2 ${customMessage.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+                    <span className={`w-2 h-2 rounded-full ${customMessage.type === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
+                    {customMessage.text}
+                  </div>
+                )}
+
+                 <div className="flex justify-end">
+                   <button 
+                     type="submit"
+                     disabled={customLoading || (!logoFile && !faviconFile)}
+                     className="bg-primary hover:bg-sky-400 text-white px-6 py-2 rounded-lg font-medium shadow-lg shadow-sky-500/20 transition-all flex items-center gap-2 disabled:opacity-50"
+                   >
+                     {customLoading ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+                     Salvar Identidade
                    </button>
                 </div>
                </form>

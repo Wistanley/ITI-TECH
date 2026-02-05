@@ -1,6 +1,6 @@
 
 import { supabase } from '../lib/supabaseClient';
-import { Task, User, ActivityLog, Status, Priority, Sector, Project } from '../types';
+import { Task, User, ActivityLog, Status, Priority, Sector, Project, SystemSettings } from '../types';
 
 class SupabaseService {
   private tasks: Task[] = [];
@@ -10,6 +10,9 @@ class SupabaseService {
   private logs: ActivityLog[] = [];
   private listeners: Array<() => void> = [];
   
+  // Global System Settings
+  public settings: SystemSettings = { logoUrl: null, faviconUrl: null };
+
   public currentUser: User | null = null;
   private initialized = false;
 
@@ -139,6 +142,40 @@ class SupabaseService {
     return data.publicUrl;
   }
 
+  // --- System Assets Management (Logo/Favicon) ---
+  async uploadSystemAsset(file: File, type: 'logo' | 'favicon'): Promise<string> {
+    // We use a fixed path but append a timestamp query param to bust cache
+    const fileExt = file.name.split('.').pop() || (type === 'favicon' ? 'ico' : 'png');
+    const fileName = `system/${type}_asset.${fileExt}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('images')
+      .upload(fileName, file, {
+        cacheControl: '0', // No cache for system assets to ensure update
+        upsert: true
+      });
+
+    if (uploadError) {
+       throw new Error(`Erro no upload do ${type}: ${uploadError.message}`);
+    }
+
+    const { data } = supabase.storage
+      .from('images')
+      .getPublicUrl(fileName);
+
+    const publicUrl = `${data.publicUrl}?t=${Date.now()}`;
+
+    // Update Local State immediately
+    if (type === 'logo') this.settings.logoUrl = publicUrl;
+    if (type === 'favicon') this.settings.faviconUrl = publicUrl;
+
+    // In a real app, we would save this URL to a 'settings' table here.
+    // For this implementation, we broadcast the change.
+    this.notify();
+    
+    return publicUrl;
+  }
+
   // --- Initialization & Realtime ---
   async initializeData() {
     if (this.initialized) return;
@@ -150,6 +187,7 @@ class SupabaseService {
       this.fetchProjects(),
       this.fetchTasks(),
       this.fetchLogs(),
+      this.fetchSystemSettings()
     ]);
 
     this.initialized = true;
@@ -206,12 +244,29 @@ class SupabaseService {
     }));
   }
 
+  private async fetchSystemSettings() {
+      // In a real scenario, this fetches from a 'settings' table.
+      // Here we check if the standard files exist by trying to get their URLs.
+      // We assume they might exist if uploaded previously.
+      const { data: logoData } = supabase.storage.from('images').getPublicUrl('system/logo_asset.png');
+      const { data: faviconData } = supabase.storage.from('images').getPublicUrl('system/favicon_asset.ico'); // or png
+      
+      // We don't verify if they actually exist via API to save requests, 
+      // but UI will handle broken images if they don't exist yet.
+      // However, to avoid broken images on fresh install, we only set if we think it was set.
+      // For this demo, we set them and let the UI fallback.
+      if (logoData) this.settings.logoUrl = `${logoData.publicUrl}?t=${Date.now()}`;
+      if (faviconData) this.settings.faviconUrl = `${faviconData.publicUrl}?t=${Date.now()}`;
+  }
+
+
   // --- Getters (Síncronos, leem do cache) ---
   getTasks() { return this.tasks; }
   getSectors() { return this.sectors; }
   getProjects() { return this.projects; }
   getUsers() { return this.users; }
   getLogs() { return this.logs; }
+  getSettings() { return this.settings; }
 
   // --- Actions (Assíncronos no banco) ---
   

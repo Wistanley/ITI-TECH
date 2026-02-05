@@ -1,3 +1,4 @@
+
 export enum Status {
   PENDING = 'Pendente',
   IN_PROGRESS = 'Em Andamento',
@@ -60,4 +61,9 @@ export interface DashboardStats {
   completedTasks: number;
   pendingTasks: number;
   completionRate: number;
+}
+
+export interface SystemSettings {
+  logoUrl: string | null;
+  faviconUrl: string | null;
 }
