@@ -294,7 +294,11 @@ class SupabaseService {
     const { error } = await supabase.from('tasks').insert(dbTask);
     if (error) throw new Error(`Erro ao criar tarefa: ${error.message}`);
     
-    this.logAction('CREATE', `Nova tarefa: ${task.plannedActivity}`);
+    // Explicit fetch and notify to update UI immediately
+    await this.fetchTasks();
+    this.notify();
+
+    await this.logAction('CREATE', `Nova tarefa: ${task.plannedActivity}`);
   }
 
   async updateTask(id: string, updates: Partial<Task>) {
@@ -312,7 +316,11 @@ class SupabaseService {
     const { error } = await supabase.from('tasks').update(dbUpdates).eq('id', id);
     if (error) throw new Error(`Erro ao atualizar tarefa: ${error.message}`);
     
-    this.logAction('UPDATE', `Tarefa atualizada`);
+    // Explicit fetch and notify to update UI immediately
+    await this.fetchTasks();
+    this.notify();
+
+    await this.logAction('UPDATE', `Tarefa atualizada`);
   }
 
   async toggleTaskCompletion(id: string) {
@@ -331,7 +339,12 @@ class SupabaseService {
   async deleteTask(id: string) {
     const { error } = await supabase.from('tasks').delete().eq('id', id);
     if (error) throw new Error(`Erro ao excluir tarefa: ${error.message}`);
-    this.logAction('DELETE', 'Tarefa removida');
+    
+    // Explicit fetch and notify to update UI immediately
+    await this.fetchTasks();
+    this.notify();
+
+    await this.logAction('DELETE', 'Tarefa removida');
   }
 
   // SECTORS & PROJECTS
@@ -390,6 +403,9 @@ class SupabaseService {
       description,
       timestamp: new Date().toISOString()
     });
+    // Also fetch logs immediately to update the widget
+    await this.fetchLogs();
+    this.notify();
   }
 
   calculateTotalHours(collaboratorId?: string): string {
