@@ -1,8 +1,8 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { User, Sector } from '../types';
 import { backend } from '../services/supabaseBackend';
-import { UserCog, Save, Loader2, KeyRound, ShieldCheck, Mail, Link as LinkIcon, Lock } from 'lucide-react';
+import { UserCog, Save, Loader2, KeyRound, ShieldCheck, Mail, Camera, Lock } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface Props {
@@ -19,6 +19,8 @@ export const ProfileView: React.FC<Props> = ({ currentUser, sectors }) => {
     avatar: currentUser.avatar,
     sector: currentUser.sector
   });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileMessage, setProfileMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
 
@@ -31,18 +33,39 @@ export const ProfileView: React.FC<Props> = ({ currentUser, sectors }) => {
   const [pwdLoading, setPwdLoading] = useState(false);
   const [pwdMessage, setPwdMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setSelectedFile(file);
+      // Create local preview
+      setProfileForm({ ...profileForm, avatar: URL.createObjectURL(file) });
+    }
+  };
+
   const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setProfileLoading(true);
     setProfileMessage(null);
 
     try {
+      let avatarUrl = profileForm.avatar;
+
+      // 1. If file selected, upload it first
+      if (selectedFile) {
+         avatarUrl = await backend.uploadAvatar(currentUser.id, selectedFile);
+      }
+
+      // 2. Update Profile with new URL (if changed) and other fields
       await backend.updateProfile(currentUser.id, {
          name: profileForm.name,
-         avatar: profileForm.avatar,
+         avatar: avatarUrl,
          sector: profileForm.sector
       });
+      
       setProfileMessage({ type: 'success', text: 'Perfil atualizado com sucesso!' });
+      setSelectedFile(null); // Clear file selection after success
     } catch (err: any) {
       setProfileMessage({ type: 'error', text: err.message || 'Erro ao atualizar perfil.' });
     } finally {
@@ -97,13 +120,27 @@ export const ProfileView: React.FC<Props> = ({ currentUser, sectors }) => {
           <div className="bg-navy-800/50 border border-slate-700 rounded-2xl p-6 shadow-xl text-center relative overflow-hidden">
              <div className="absolute top-0 left-0 w-full h-24 bg-gradient-to-br from-blue-600/20 to-cyan-500/20 z-0"></div>
              
-             <div className="relative z-10 mt-8 mb-4">
-               <img 
-                 src={profileForm.avatar} 
-                 alt="Avatar" 
-                 className="w-32 h-32 rounded-full border-4 border-navy-800 shadow-2xl mx-auto object-cover bg-navy-900"
-                 onError={(e) => { e.currentTarget.src = 'https://ui-avatars.com/api/?name=User'; }}
+             <div className="relative z-10 mt-8 mb-4 group inline-block cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+               <div className="relative w-32 h-32 mx-auto">
+                 <img 
+                   src={profileForm.avatar} 
+                   alt="Avatar" 
+                   className="w-full h-full rounded-full border-4 border-navy-800 shadow-2xl object-cover bg-navy-900"
+                   onError={(e) => { e.currentTarget.src = 'https://ui-avatars.com/api/?name=User'; }}
+                 />
+                 <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Camera className="text-white" size={24} />
+                 </div>
+               </div>
+               {/* Hidden File Input */}
+               <input 
+                 type="file" 
+                 ref={fileInputRef} 
+                 onChange={handleFileChange} 
+                 className="hidden" 
+                 accept="image/*"
                />
+               <p className="text-xs text-primary mt-2 group-hover:underline">Alterar foto</p>
              </div>
              
              <h3 className="text-xl font-bold text-white relative z-10">{currentUser.name}</h3>
@@ -165,20 +202,6 @@ export const ProfileView: React.FC<Props> = ({ currentUser, sectors }) => {
                         className="w-full bg-navy-900 border border-slate-700 text-white rounded-lg pl-10 pr-4 py-2.5 focus:border-primary focus:ring-1 focus:ring-primary outline-none"
                       />
                     </div>
-                  </div>
-
-                  <div className="col-span-2">
-                    <label className="block text-sm font-medium text-slate-400 mb-1.5">URL do Avatar</label>
-                    <div className="relative">
-                      <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-                      <input 
-                        type="text" 
-                        value={profileForm.avatar}
-                        onChange={e => setProfileForm({...profileForm, avatar: e.target.value})}
-                        className="w-full bg-navy-900 border border-slate-700 text-white rounded-lg pl-10 pr-4 py-2.5 focus:border-primary focus:ring-1 focus:ring-primary outline-none"
-                      />
-                    </div>
-                    <p className="text-xs text-slate-500 mt-1">Cole o link de uma imagem (ex: GitHub, Imgur).</p>
                   </div>
 
                   <div>

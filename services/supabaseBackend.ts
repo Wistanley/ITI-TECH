@@ -112,6 +112,31 @@ class SupabaseService {
      }
   }
 
+  async uploadAvatar(userId: string, file: File): Promise<string> {
+    // 1. Create a unique file path: avatars/userId_timestamp.ext
+    const fileExt = file.name.split('.').pop();
+    const fileName = `avatars/${userId}_${Date.now()}.${fileExt}`;
+
+    // 2. Upload to 'images' bucket
+    const { error: uploadError } = await supabase.storage
+      .from('images')
+      .upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
+
+    if (uploadError) {
+      throw new Error(`Erro no upload: ${uploadError.message}`);
+    }
+
+    // 3. Get Public URL
+    const { data } = supabase.storage
+      .from('images')
+      .getPublicUrl(fileName);
+
+    return data.publicUrl;
+  }
+
   // --- Initialization & Realtime ---
   async initializeData() {
     if (this.initialized) return;
