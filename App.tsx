@@ -32,6 +32,9 @@ const LoginScreen: React.FC<{ onLogin: (user: User) => void; settings: SystemSet
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Handle fallback if image 404s (e.g. fresh install)
+  const [logoError, setLogoError] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,14 +62,19 @@ const LoginScreen: React.FC<{ onLogin: (user: User) => void; settings: SystemSet
       <div className="bg-navy-800/80 backdrop-blur-xl p-8 rounded-2xl border border-white/5 shadow-2xl w-full max-w-md z-10 relative">
         <div className="text-center mb-8">
            {/* Dynamic Logo in Login */}
-           {settings.logoUrl ? (
-             <img src={settings.logoUrl} alt="Logo" className="h-16 w-auto mx-auto mb-4 drop-shadow-[0_0_15px_rgba(14,165,233,0.3)]" />
+           {settings.logoUrl && !logoError ? (
+             <img 
+                src={settings.logoUrl} 
+                alt="Logo" 
+                className="h-16 w-auto mx-auto mb-4 drop-shadow-[0_0_15px_rgba(14,165,233,0.3)]" 
+                onError={() => setLogoError(true)}
+             />
            ) : (
              <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 mb-4 shadow-lg shadow-blue-500/20">
                <LayoutDashboard className="text-white" size={24} />
              </div>
            )}
-          <h1 className="text-3xl font-bold text-white tracking-tight">{settings.logoUrl ? '' : 'ITI TECH'}</h1>
+          <h1 className="text-3xl font-bold text-white tracking-tight">{(settings.logoUrl && !logoError) ? '' : 'ITI TECH'}</h1>
           <p className="text-slate-400 mt-2">Acesse sua conta</p>
         </div>
 
@@ -147,6 +155,7 @@ export default function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoadingSession, setIsLoadingSession] = useState(true);
   const [settings, setSettings] = useState<SystemSettings>({ logoUrl: null, faviconUrl: null });
+  const [logoError, setLogoError] = useState(false);
   
   // UI State
   const [currentView, setCurrentView] = useState<'dashboard' | 'activities' | 'planning' | 'settings' | 'profile'>('dashboard');
@@ -175,6 +184,7 @@ export default function App() {
       setSectors(backend.getSectors());
       setProjects(backend.getProjects());
       setSettings(backend.getSettings());
+      setLogoError(false); // Reset error state on data refresh just in case
       // Also ensure current user is up to date if their profile changed
       if (backend.currentUser) setCurrentUser(backend.currentUser);
     };
@@ -319,14 +329,19 @@ export default function App() {
       <aside className="w-64 bg-navy-900 border-r border-slate-800 flex flex-col hidden md:flex">
         <div className="p-6 flex items-center gap-3">
           {/* Dynamic Logo in Sidebar */}
-          {settings.logoUrl ? (
-             <img src={settings.logoUrl} alt="Logo" className="h-8 w-auto max-w-[150px] object-contain" />
+          {settings.logoUrl && !logoError ? (
+             <img 
+               src={settings.logoUrl} 
+               alt="Logo" 
+               className="h-8 w-auto max-w-[150px] object-contain" 
+               onError={() => setLogoError(true)}
+             />
           ) : (
              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
                <LayoutDashboard className="text-white" size={18} />
              </div>
           )}
-          {!settings.logoUrl && <span className="font-bold text-lg tracking-tight text-white">ITI TECH</span>}
+          {(!settings.logoUrl || logoError) && <span className="font-bold text-lg tracking-tight text-white">ITI TECH</span>}
         </div>
 
         <div className="px-4 py-2">

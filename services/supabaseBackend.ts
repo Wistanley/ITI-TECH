@@ -144,9 +144,17 @@ class SupabaseService {
 
   // --- System Assets Management (Logo/Favicon) ---
   async uploadSystemAsset(file: File, type: 'logo' | 'favicon'): Promise<string> {
-    // We use a fixed path but append a timestamp query param to bust cache
-    const fileExt = file.name.split('.').pop() || (type === 'favicon' ? 'ico' : 'png');
-    const fileName = `system/${type}_asset.${fileExt}`;
+    // FORCE standardized filenames. 
+    // This allows us to persist the "setting" without a database table 
+    // by simply always looking for these specific files.
+    // Browsers will handle the content-type (e.g. valid PNG or ICO) correctly.
+    
+    let fileName = '';
+    if (type === 'logo') {
+        fileName = 'system/app_logo.png'; 
+    } else {
+        fileName = 'system/app_favicon.png';
+    }
 
     const { error: uploadError } = await supabase.storage
       .from('images')
@@ -163,14 +171,14 @@ class SupabaseService {
       .from('images')
       .getPublicUrl(fileName);
 
+    // Add timestamp to bust browser cache immediately
     const publicUrl = `${data.publicUrl}?t=${Date.now()}`;
 
     // Update Local State immediately
     if (type === 'logo') this.settings.logoUrl = publicUrl;
     if (type === 'favicon') this.settings.faviconUrl = publicUrl;
 
-    // In a real app, we would save this URL to a 'settings' table here.
-    // For this implementation, we broadcast the change.
+    // Broadcast change
     this.notify();
     
     return publicUrl;
@@ -245,18 +253,15 @@ class SupabaseService {
   }
 
   private async fetchSystemSettings() {
-      // In a real scenario, this fetches from a 'settings' table.
-      // Here we check if the standard files exist by trying to get their URLs.
-      // We assume they might exist if uploaded previously.
-      const { data: logoData } = supabase.storage.from('images').getPublicUrl('system/logo_asset.png');
-      const { data: faviconData } = supabase.storage.from('images').getPublicUrl('system/favicon_asset.ico'); // or png
+      // Look for the standard filenames
+      const { data: logoData } = supabase.storage.from('images').getPublicUrl('system/app_logo.png');
+      const { data: faviconData } = supabase.storage.from('images').getPublicUrl('system/app_favicon.png');
       
-      // We don't verify if they actually exist via API to save requests, 
-      // but UI will handle broken images if they don't exist yet.
-      // However, to avoid broken images on fresh install, we only set if we think it was set.
-      // For this demo, we set them and let the UI fallback.
-      if (logoData) this.settings.logoUrl = `${logoData.publicUrl}?t=${Date.now()}`;
-      if (faviconData) this.settings.faviconUrl = `${faviconData.publicUrl}?t=${Date.now()}`;
+      // We append a timestamp to ensure we don't get a cached stale version on reload
+      // Supabase getPublicUrl just builds a string, it doesn't check existence.
+      // The UI must handle 404s if the file hasn't been uploaded yet.
+      this.settings.logoUrl = `${logoData.publicUrl}?t=${new Date().getTime()}`;
+      this.settings.faviconUrl = `${faviconData.publicUrl}?t=${new Date().getTime()}`;
   }
 
 
