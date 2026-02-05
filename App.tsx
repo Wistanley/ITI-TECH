@@ -175,8 +175,9 @@ export default function App() {
 
   // 2. Load Data Subscription
   useEffect(() => {
-    // Only subscribe if logged in
-    
+    // Only run this effect if we have a logged-in user
+    if (!currentUser) return;
+
     const refreshData = () => {
       setUsers(backend.getUsers());
       setTasks(backend.getTasks());
@@ -184,11 +185,22 @@ export default function App() {
       setSectors(backend.getSectors());
       setProjects(backend.getProjects());
       setSettings(backend.getSettings());
-      setLogoError(false); // Reset error state on data refresh just in case
-      // Also ensure current user is up to date if their profile changed
-      if (backend.currentUser) setCurrentUser(backend.currentUser);
+      setLogoError(false); 
+      
+      // Sync currentUser state with backend if profile updated
+      if (backend.currentUser && backend.currentUser.id === currentUser.id) {
+         // This triggers re-render only if object is different
+         setCurrentUser(prev => {
+             // Avoid loop if deep equal or same ref, but backend.currentUser usually is stable or updated by action
+             if (JSON.stringify(prev) !== JSON.stringify(backend.currentUser)) {
+                 return backend.currentUser;
+             }
+             return prev;
+         });
+      }
     };
 
+    // Ensure data is initialized
     backend.initializeData().then(() => {
       refreshData();
     });
@@ -198,7 +210,7 @@ export default function App() {
     });
 
     return () => unsubscribe();
-  }, [currentUser]); // Refresh when user state changes (login/logout) to ensure data refetch
+  }, [currentUser]); 
 
   // 3. Update Favicon dynamically
   useEffect(() => {
@@ -220,6 +232,12 @@ export default function App() {
 
   const handleLogout = () => {
     backend.logout();
+    // Clear all local state to ensure no stale data appears on next login
+    setTasks([]);
+    setLogs([]);
+    setUsers([]);
+    setSectors([]);
+    setProjects([]);
     setCurrentUser(null);
   };
 
