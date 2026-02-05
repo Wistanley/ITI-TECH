@@ -167,7 +167,6 @@ export default function App() {
   // 2. Load Data Subscription
   useEffect(() => {
     // Only subscribe if logged in
-    // Note: We might want settings even if not logged in for the login screen logo
     
     const refreshData = () => {
       setUsers(backend.getUsers());
@@ -457,4 +456,49 @@ export default function App() {
                 tasks={tasks}
                 projects={projects}
                 users={users}
-                currentUser
+                currentUser={currentUser}
+                onEdit={handleEdit}
+                onDuplicate={handleDuplicate}
+                onDelete={handleDelete}
+              />
+            )}
+
+            {/* VIEW: PLANNING */}
+            {currentView === 'planning' && (
+              <WeeklyPlanningView tasks={tasks} projects={projects} currentUser={currentUser} />
+            )}
+
+            {/* VIEW: SETTINGS */}
+            {currentView === 'settings' && (
+              <SettingsView sectors={sectors} projects={projects} users={users} />
+            )}
+
+            {/* VIEW: PROFILE */}
+            {currentView === 'profile' && (
+              <ProfileView currentUser={currentUser} sectors={sectors} />
+            )}
+            
+          </div>
+
+          {/* Right Column: Activity Log Widget (Visible on Dashboard and Activities) */}
+          {(currentView === 'dashboard' || currentView === 'activities') && (
+            <div className="w-80 hidden xl:block">
+              <ActivityLogWidget logs={logs} users={users} />
+            </div>
+          )}
+
+        </div>
+      </main>
+
+      <TaskModal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        taskToEdit={editingTask}
+        initialData={duplicatingTask}
+        projects={projects}
+        sectors={sectors}
+        users={users}
+      />
+    </div>
+  );
+}
