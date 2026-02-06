@@ -405,6 +405,10 @@ class SupabaseService {
               content: content
           });
 
+          // FORCE UI UPDATE (User message)
+          await this.fetchChatMessages();
+          this.notify();
+
           // PREPARE CONTEXT FOR GEMINI
           const historyLimit = 15;
           const channelMessages = this.getChatMessages(channelId).slice(-historyLimit);
@@ -440,6 +444,10 @@ class SupabaseService {
               role: 'model',
               content: aiResponseText
           });
+          
+          // FORCE UI UPDATE (AI Response)
+          await this.fetchChatMessages();
+          this.notify();
 
       } catch (err: any) {
           console.error("Chat Error:", err);
@@ -453,6 +461,11 @@ class SupabaseService {
               role: 'model',
               content: errorMsg
           });
+          
+          // FORCE UI UPDATE (Error)
+          await this.fetchChatMessages();
+          this.notify();
+
       } finally {
           // Unlock
           await supabase.from('chat_channels').update({
