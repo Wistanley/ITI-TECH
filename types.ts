@@ -92,8 +92,17 @@ export interface BoardTask {
 
 // --- New Types for Chat ---
 
+export interface ChatChannel {
+  id: string;
+  name: string;
+  isLocked: boolean;
+  lockedByUserId: string | null;
+  createdAt: string;
+}
+
 export interface ChatMessage {
   id: string;
+  channelId: string;
   userId: string | null; // Null if AI
   role: 'user' | 'model';
   content: string;
@@ -102,6 +111,7 @@ export interface ChatMessage {
 }
 
 export interface ChatState {
+  // Legacy global state (optional now)
   isLocked: boolean;
   lockedByUserId: string | null;
   updatedAt: string;

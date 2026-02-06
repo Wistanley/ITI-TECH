@@ -1,6 +1,6 @@
 
 import { supabase } from '../lib/supabaseClient';
-import { Task, User, ActivityLog, Status, Priority, Sector, Project, SystemSettings, BoardTask, BoardStatus, Subtask, ChatMessage, ChatState } from '../types';
+import { Task, User, ActivityLog, Status, Priority, Sector, Project, SystemSettings, BoardTask, BoardStatus, Subtask, ChatMessage, ChatState, ChatChannel } from '../types';
 import { GoogleGenAI } from "@google/genai";
 
 class SupabaseService {
@@ -11,9 +11,9 @@ class SupabaseService {
   private logs: ActivityLog[] = [];
   
   // Chat Data
-  private chatMessages: ChatMessage[] = [];
-  private chatState: ChatState = { isLocked: false, lockedByUserId: null, updatedAt: new Date().toISOString() };
-
+  private chatChannels: ChatChannel[] = [];
+  private chatMessages: ChatMessage[] = []; // Stores messages for ALL channels, filtered in UI or Getter
+  
   // New Cache for Board Tasks
   private boardTasks: BoardTask[] = [];
 
@@ -31,7 +31,6 @@ class SupabaseService {
   constructor() {
     // Initialize Gemini
     // VITE REQUIREMENT: Env vars must start with VITE_ to be exposed to the client
-    // We check import.meta.env (Vite standard) first.
     const apiKey = (import.meta as any).env?.VITE_API_KEY || process.env.API_KEY;
 
     if (apiKey) {
@@ -98,6 +97,7 @@ class SupabaseService {
     this.projects = [];
     this.users = [];
     this.chatMessages = [];
+    this.chatChannels = [];
     this.initialized = false;
     this.notify();
   }
@@ -144,17 +144,14 @@ class SupabaseService {
   }
 
   async uploadAvatar(userId: string, file: File): Promise<string> {
-    // 1. Sanitize and Create Path
     const fileExt = file.name.split('.').pop() || 'jpg';
-    // Remove special chars to avoid storage issues
     const fileName = `avatars/${userId}_${Date.now()}.${fileExt}`;
 
-    // 2. Upload to 'images' bucket
     const { error: uploadError } = await supabase.storage
       .from('images')
       .upload(fileName, file, {
         cacheControl: '3600',
-        upsert: true // Allow overwriting to prevent errors on retries
+        upsert: true 
       });
 
     if (uploadError) {
@@ -162,7 +159,6 @@ class SupabaseService {
       throw new Error(`Erro no upload: ${uploadError.message}`);
     }
 
-    // 3. Get Public URL
     const { data } = supabase.storage
       .from('images')
       .getPublicUrl(fileName);
@@ -170,7 +166,6 @@ class SupabaseService {
     return data.publicUrl;
   }
 
-  // --- System Assets Management (Logo/Favicon) ---
   async uploadSystemAsset(file: File, type: 'logo' | 'favicon'): Promise<string> {
     let fileName = '';
     if (type === 'logo') {
@@ -182,7 +177,7 @@ class SupabaseService {
     const { error: uploadError } = await supabase.storage
       .from('images')
       .upload(fileName, file, {
-        cacheControl: '0', // No cache for system assets to ensure update
+        cacheControl: '0', 
         upsert: true
       });
 
@@ -200,7 +195,6 @@ class SupabaseService {
     if (type === 'favicon') this.settings.faviconUrl = publicUrl;
 
     this.notify();
-    
     return publicUrl;
   }
 
@@ -208,15 +202,14 @@ class SupabaseService {
   async initializeData() {
     if (this.initialized) return;
 
-    // 1. Fetch Initial Data in Parallel
     await Promise.all([
       this.fetchUsers(),
       this.fetchSectors(),
       this.fetchProjects(),
       this.fetchTasks(),
       this.fetchBoardTasks(), 
-      this.fetchChatMessages(), // NEW
-      this.fetchChatState(), // NEW
+      this.fetchChatChannels(), // NEW
+      this.fetchChatMessages(), 
       this.fetchLogs(),
       this.fetchSystemSettings()
     ]);
@@ -224,7 +217,7 @@ class SupabaseService {
     this.initialized = true;
     this.notify();
 
-    // 2. Setup Realtime Subscription
+    // Setup Realtime Subscription
     supabase.channel('public-db-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => this.fetchTasks().then(() => this.notify()))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'board_tasks' }, () => this.fetchBoardTasks().then(() => this.notify()))
@@ -232,8 +225,8 @@ class SupabaseService {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, () => this.fetchProjects().then(() => this.notify()))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sectors' }, () => this.fetchSectors().then(() => this.notify()))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => this.fetchUsers().then(() => this.notify()))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, () => this.fetchChatMessages().then(() => this.notify())) // NEW
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_state' }, () => this.fetchChatState().then(() => this.notify())) // NEW
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_channels' }, () => this.fetchChatChannels().then(() => this.notify())) // NEW
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, () => this.fetchChatMessages().then(() => this.notify())) 
       .subscribe();
   }
 
@@ -283,32 +276,60 @@ class SupabaseService {
   }
 
   // Chat Fetchers
+  private async fetchChatChannels() {
+      // In a real scenario, we'd select from 'chat_channels' table
+      // If table doesn't exist, this might fail, so we wrap in try/catch or handle gracefully
+      try {
+          const { data, error } = await supabase.from('chat_channels').select('*').order('created_at', { ascending: true });
+          if (error) {
+              console.warn("Could not fetch chat channels (Table might be missing):", error.message);
+              // Fallback for demo if table missing: Provide one local channel
+              if(this.chatChannels.length === 0) {
+                 this.chatChannels = [{
+                     id: 'general-channel-id',
+                     name: 'Geral',
+                     isLocked: false,
+                     lockedByUserId: null,
+                     createdAt: new Date().toISOString()
+                 }];
+              }
+              return;
+          }
+          
+          if (data && data.length > 0) {
+              this.chatChannels = data.map(c => ({
+                  id: c.id,
+                  name: c.name,
+                  isLocked: c.is_locked,
+                  lockedByUserId: c.locked_by,
+                  createdAt: c.created_at
+              }));
+          } else {
+             // Create default 'Geral' channel if none exist
+             await this.createChatChannel('Geral');
+          }
+      } catch (e) {
+          console.error("Error fetching channels:", e);
+      }
+  }
+
   private async fetchChatMessages() {
-      // Fetch latest 50 messages
-      const { data } = await supabase.from('chat_messages').select('*').order('created_at', { ascending: true }).limit(50);
+      // Fetch latest 100 messages globally (client filters by channel)
+      // Or we could fetch per channel on selection. For simplicity, fetch recent global.
+      const { data } = await supabase.from('chat_messages').select('*').order('created_at', { ascending: true }).limit(200);
       if (data) {
           this.chatMessages = data.map(msg => ({
               id: msg.id,
+              channelId: msg.channel_id || 'general-channel-id', // Backward compatibility
               userId: msg.user_id,
               role: msg.role,
               content: msg.content,
               createdAt: msg.created_at,
-              user: this.users.find(u => u.id === msg.user_id) // Hydrate user
+              user: this.users.find(u => u.id === msg.user_id)
           }));
       }
   }
-
-  private async fetchChatState() {
-      const { data } = await supabase.from('chat_state').select('*').eq('id', 1).single();
-      if (data) {
-          this.chatState = {
-              isLocked: data.is_locked,
-              lockedByUserId: data.locked_by_user_id,
-              updatedAt: data.updated_at
-          };
-      }
-  }
-
+  
   private async fetchSystemSettings() {
       const { data: logoData } = supabase.storage.from('images').getPublicUrl('system/app_logo.png');
       const { data: faviconData } = supabase.storage.from('images').getPublicUrl('system/app_favicon.png');
@@ -326,55 +347,79 @@ class SupabaseService {
   getUsers() { return this.users; }
   getLogs() { return this.logs; }
   getSettings() { return this.settings; }
-  getChatMessages() { return this.chatMessages; }
-  getChatState() { return this.chatState; }
+  getChatMessages(channelId?: string) { 
+      if (!channelId) return [];
+      return this.chatMessages.filter(m => m.channelId === channelId); 
+  }
+  getChatChannels() { return this.chatChannels; }
+
 
   // --- Chat Actions ---
   
-  async sendChatMessage(content: string) {
+  async createChatChannel(name: string) {
+      if (!this.currentUser) return;
+      const { error } = await supabase.from('chat_channels').insert({
+          name: name,
+          is_locked: false,
+          locked_by: null,
+          created_at: new Date().toISOString()
+      });
+      if (error) throw new Error(error.message);
+      await this.fetchChatChannels();
+      this.notify();
+  }
+
+  async deleteChatChannel(id: string) {
+     if (confirm("Excluir este canal e todas as mensagens?")) {
+         await supabase.from('chat_channels').delete().eq('id', id);
+         // Cascade delete messages usually handled by DB, but explicit here if needed
+         await supabase.from('chat_messages').delete().eq('channel_id', id);
+         await this.fetchChatChannels();
+         this.notify();
+     }
+  }
+
+  async sendChatMessage(channelId: string, content: string) {
       if (!this.currentUser) return;
       if (!this.ai) {
         throw new Error("Chat indisponível: API Key não configurada.");
       }
       
-      // 1. Try to acquire Lock (Optimistic UI handled by component, but DB enforces truth)
-      // Check current lock
-      if (this.chatState.isLocked) throw new Error("O chat está bloqueado por outro usuário.");
+      // Find current channel state
+      const channel = this.chatChannels.find(c => c.id === channelId);
+      if (!channel) throw new Error("Canal não encontrado.");
+
+      // Check lock
+      if (channel.isLocked) throw new Error("O chat está bloqueado por outro usuário.");
 
       try {
-          // Lock the chat in DB
-          await supabase.from('chat_state').update({
+          // Lock the channel
+          await supabase.from('chat_channels').update({
               is_locked: true,
-              locked_by_user_id: this.currentUser.id,
-              updated_at: new Date().toISOString()
-          }).eq('id', 1);
+              locked_by: this.currentUser.id
+          }).eq('id', channelId);
           
           // Insert User Message
           await supabase.from('chat_messages').insert({
+              channel_id: channelId,
               user_id: this.currentUser.id,
               role: 'user',
               content: content
           });
 
           // PREPARE CONTEXT FOR GEMINI
-          // Fetch updated history or use local + current message
-          // We need to format the history so Gemini knows WHO said WHAT.
-          // Gemini doesn't strictly support multi-user roles in the API schema yet (only user/model),
-          // so we simulate it by prepending names in the 'user' content.
-          const historyLimit = 10;
-          const contextMessages = this.chatMessages.slice(-historyLimit);
+          const historyLimit = 15;
+          const channelMessages = this.getChatMessages(channelId).slice(-historyLimit);
           
-          let historyPrompt = "Histórico da conversa:\n";
-          contextMessages.forEach(msg => {
+          let historyPrompt = "Histórico do canal:\n";
+          channelMessages.forEach(msg => {
               const name = msg.user ? msg.user.name : "Gemini AI";
               historyPrompt += `${name}: ${msg.content}\n`;
           });
           
-          // Current Prompt with User Identity
           const currentPrompt = `O usuário ${this.currentUser.name} disse: ${content}`;
 
           // CALL GEMINI
-          // Using gemini-2.5-flash which is generally stable
           const response = await this.ai.models.generateContent({
               model: 'gemini-2.5-flash', 
               contents: [
@@ -384,7 +429,7 @@ class SupabaseService {
                 }
               ],
               config: {
-                 systemInstruction: "Você é um assistente de IA colaborativo da equipe ITI TECH. Você está em um chat de grupo. Responda de forma concisa, profissional e útil. Identifique a quem você está respondendo se houver ambiguidade. O contexto da conversa anterior foi fornecido.",
+                 systemInstruction: `Você é um assistente de IA colaborativo da equipe ITI TECH. Você está no canal de chat "${channel.name}". Responda de forma concisa, profissional e útil.`,
               }
           });
 
@@ -392,6 +437,7 @@ class SupabaseService {
 
           // Insert AI Message
           await supabase.from('chat_messages').insert({
+              channel_id: channelId,
               user_id: null,
               role: 'model',
               content: aiResponseText
@@ -399,24 +445,22 @@ class SupabaseService {
 
       } catch (err: any) {
           console.error("Chat Error:", err);
-          
-          let errorMsg = "Desculpe, ocorreu um erro ao processar sua solicitação com a IA.";
-          if (err.message?.includes('404')) errorMsg += " (Modelo de IA não encontrado)";
-          if (err.message?.includes('403')) errorMsg += " (Chave de API inválida)";
+          let errorMsg = "Erro na IA.";
+           if (err.message?.includes('404')) errorMsg += " (Modelo não encontrado)";
+          if (err.message?.includes('403')) errorMsg += " (Chave inválida)";
 
-          // Insert Error Message as AI response just to release lock gracefully visually
           await supabase.from('chat_messages').insert({
+              channel_id: channelId,
               user_id: null,
               role: 'model',
               content: errorMsg
           });
       } finally {
-          // Unlock the chat regardless of success/fail
-          await supabase.from('chat_state').update({
+          // Unlock
+          await supabase.from('chat_channels').update({
               is_locked: false,
-              locked_by_user_id: null,
-              updated_at: new Date().toISOString()
-          }).eq('id', 1);
+              locked_by: null
+          }).eq('id', channelId);
       }
   }
 

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 // SWITCH TO REAL BACKEND
 import { backend } from './services/supabaseBackend'; 
-import { Task, User, ActivityLog, Status, Sector, Project, SystemSettings, BoardTask, ChatMessage, ChatState } from './types';
+import { Task, User, ActivityLog, Status, Sector, Project, SystemSettings, BoardTask, ChatMessage } from './types';
 import { ActivityLogWidget } from './components/ActivityLogWidget';
 import { TaskModal } from './components/TaskModal';
 import { SettingsView } from './components/SettingsView';
@@ -164,7 +164,6 @@ export default function App() {
 
   // Chat Data
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [chatState, setChatState] = useState<ChatState>({ isLocked: false, lockedByUserId: null, updatedAt: '' });
   
   // UI State
   const [currentView, setCurrentView] = useState<'dashboard' | 'activities' | 'planning' | 'board' | 'chat' | 'settings' | 'profile'>('dashboard');
@@ -196,7 +195,6 @@ export default function App() {
       setProjects(backend.getProjects());
       setSettings(backend.getSettings());
       setChatMessages(backend.getChatMessages()); // NEW
-      setChatState(backend.getChatState()); // NEW
       setLogoError(false); 
       
       // Sync currentUser state with backend if profile updated
@@ -540,7 +538,6 @@ export default function App() {
             {currentView === 'chat' && (
                <ChatView 
                   messages={chatMessages} 
-                  chatState={chatState} 
                   currentUser={currentUser} 
                   users={users}
                />
