@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { backend } from '../services/supabaseBackend';
 import { ChatMessage, ChatState, User } from '../types';
-import { Send, Bot, Lock, Loader2, Sparkles, User as UserIcon } from 'lucide-react';
+import { Send, Bot, Lock, Loader2, Sparkles, User as UserIcon, KeyRound, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface Props {
@@ -15,6 +15,8 @@ interface Props {
 export const ChatView: React.FC<Props> = ({ messages, chatState, currentUser, users }) => {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  const isAiConfigured = backend.isGeminiConfigured();
 
   // Auto-scroll
   useEffect(() => {
@@ -41,6 +43,37 @@ export const ChatView: React.FC<Props> = ({ messages, chatState, currentUser, us
     : null;
 
   const isLockedByMe = chatState.lockedByUserId === currentUser.id;
+
+  if (!isAiConfigured) {
+    return (
+      <div className="flex flex-col h-full bg-[#02040a] relative overflow-hidden rounded-xl border border-slate-800 items-center justify-center p-8">
+         <div className="bg-navy-800/50 border border-slate-700 p-8 rounded-2xl max-w-lg text-center shadow-2xl">
+            <div className="w-16 h-16 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-indigo-500/20">
+               <KeyRound className="text-white" size={32} />
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-2">Configuração Necessária</h2>
+            <p className="text-slate-400 mb-6">
+              Para utilizar o Chat Colaborativo, é necessário configurar a API Key do Google Gemini no seu ambiente.
+            </p>
+            
+            <div className="bg-navy-900 border border-slate-800 rounded-lg p-4 text-left mb-6 font-mono text-sm relative group">
+               <p className="text-slate-500 mb-2 text-xs uppercase font-bold">Adicione nas Variáveis de Ambiente (Vercel/.env)</p>
+               <code className="text-emerald-400 block break-all">VITE_API_KEY=sua_chave_do_aistudio</code>
+            </div>
+
+            <a 
+              href="https://aistudio.google.com/app/apikey" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl font-medium transition-all hover:scale-105"
+            >
+              Gerar Chave no Google AI Studio
+              <ExternalLink size={16} />
+            </a>
+         </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full bg-[#02040a] relative overflow-hidden rounded-xl border border-slate-800">

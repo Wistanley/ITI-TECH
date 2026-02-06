@@ -32,12 +32,19 @@ class SupabaseService {
     // Initialize Gemini
     // NOTE: In a real prod environment, keep the API key safe. 
     // Since this is a request to integrate based on provided env rules:
-    const apiKey = process.env.API_KEY;
+    
+    // VITE REQUIREMENT: Env vars must start with VITE_ to be exposed to the client
+    const apiKey = (import.meta as any).env?.VITE_API_KEY || process.env.API_KEY;
+
     if (apiKey) {
       this.ai = new GoogleGenAI({ apiKey });
     } else {
-      console.warn("Gemini API Key missing. Chat features will be disabled.");
+      console.warn("Gemini API Key missing (Checked VITE_API_KEY). Chat features will be disabled.");
     }
+  }
+
+  public isGeminiConfigured(): boolean {
+    return !!this.ai;
   }
 
   // --- Auth Wrapper ---
