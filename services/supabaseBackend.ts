@@ -1,6 +1,6 @@
 
 import { supabase } from '../lib/supabaseClient';
-import { Task, User, ActivityLog, Status, Priority, Sector, Project, SystemSettings } from '../types';
+import { Task, User, ActivityLog, Status, Priority, Sector, Project, SystemSettings, BoardTask, BoardStatus, Subtask } from '../types';
 
 class SupabaseService {
   private tasks: Task[] = [];
@@ -8,6 +8,10 @@ class SupabaseService {
   private projects: Project[] = [];
   private users: User[] = [];
   private logs: ActivityLog[] = [];
+  
+  // New Cache for Board Tasks
+  private boardTasks: BoardTask[] = [];
+
   private listeners: Array<() => void> = [];
   
   // Global System Settings
@@ -66,6 +70,7 @@ class SupabaseService {
     await supabase.auth.signOut();
     this.currentUser = null;
     this.tasks = [];
+    this.boardTasks = [];
     this.logs = [];
     this.sectors = [];
     this.projects = [];
@@ -144,11 +149,6 @@ class SupabaseService {
 
   // --- System Assets Management (Logo/Favicon) ---
   async uploadSystemAsset(file: File, type: 'logo' | 'favicon'): Promise<string> {
-    // FORCE standardized filenames. 
-    // This allows us to persist the "setting" without a database table 
-    // by simply always looking for these specific files.
-    // Browsers will handle the content-type (e.g. valid PNG or ICO) correctly.
-    
     let fileName = '';
     if (type === 'logo') {
         fileName = 'system/app_logo.png'; 
@@ -171,14 +171,11 @@ class SupabaseService {
       .from('images')
       .getPublicUrl(fileName);
 
-    // Add timestamp to bust browser cache immediately
     const publicUrl = `${data.publicUrl}?t=${Date.now()}`;
 
-    // Update Local State immediately
     if (type === 'logo') this.settings.logoUrl = publicUrl;
     if (type === 'favicon') this.settings.faviconUrl = publicUrl;
 
-    // Broadcast change
     this.notify();
     
     return publicUrl;
@@ -194,6 +191,7 @@ class SupabaseService {
       this.fetchSectors(),
       this.fetchProjects(),
       this.fetchTasks(),
+      this.fetchBoardTasks(), // NEW
       this.fetchLogs(),
       this.fetchSystemSettings()
     ]);
@@ -204,6 +202,7 @@ class SupabaseService {
     // 2. Setup Realtime Subscription
     supabase.channel('public-db-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => this.fetchTasks().then(() => this.notify()))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'board_tasks' }, () => this.fetchBoardTasks().then(() => this.notify())) // NEW
       .on('postgres_changes', { event: '*', schema: 'public', table: 'activity_logs' }, () => this.fetchLogs().then(() => this.notify()))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, () => this.fetchProjects().then(() => this.notify()))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sectors' }, () => this.fetchSectors().then(() => this.notify()))
@@ -213,7 +212,6 @@ class SupabaseService {
 
   subscribe(callback: () => void) {
     this.listeners.push(callback);
-    // Se já tiver dados, notifica imediatamente
     if (this.initialized) callback();
     return () => {
       this.listeners = this.listeners.filter(cb => cb !== callback);
@@ -224,10 +222,16 @@ class SupabaseService {
     this.listeners.forEach(cb => cb());
   }
 
-  // --- Fetchers (Atualizam o Cache Local) ---
+  // --- Fetchers ---
   private async fetchTasks() {
     const { data } = await supabase.from('tasks').select('*').order('updated_at', { ascending: false });
     if (data) this.tasks = data.map(this.mapDbToTask);
+  }
+
+  // NEW: Fetch Board Tasks
+  private async fetchBoardTasks() {
+    const { data } = await supabase.from('board_tasks').select('*').order('updated_at', { ascending: false });
+    if (data) this.boardTasks = data.map(this.mapDbToBoardTask);
   }
   
   private async fetchSectors() {
@@ -253,27 +257,24 @@ class SupabaseService {
   }
 
   private async fetchSystemSettings() {
-      // Look for the standard filenames
       const { data: logoData } = supabase.storage.from('images').getPublicUrl('system/app_logo.png');
       const { data: faviconData } = supabase.storage.from('images').getPublicUrl('system/app_favicon.png');
       
-      // We append a timestamp to ensure we don't get a cached stale version on reload
-      // Supabase getPublicUrl just builds a string, it doesn't check existence.
-      // The UI must handle 404s if the file hasn't been uploaded yet.
       this.settings.logoUrl = `${logoData.publicUrl}?t=${new Date().getTime()}`;
       this.settings.faviconUrl = `${faviconData.publicUrl}?t=${new Date().getTime()}`;
   }
 
 
-  // --- Getters (Síncronos, leem do cache) ---
+  // --- Getters ---
   getTasks() { return this.tasks; }
+  getBoardTasks() { return this.boardTasks; } // NEW
   getSectors() { return this.sectors; }
   getProjects() { return this.projects; }
   getUsers() { return this.users; }
   getLogs() { return this.logs; }
   getSettings() { return this.settings; }
 
-  // --- Actions (Assíncronos no banco) ---
+  // --- Actions ---
   
   // TASKS
   async createTask(task: Omit<Task, 'id' | 'updatedAt'>) {
@@ -294,11 +295,9 @@ class SupabaseService {
     const { error } = await supabase.from('tasks').insert(dbTask);
     if (error) throw new Error(`Erro ao criar tarefa: ${error.message}`);
     
-    // Explicit fetch and notify to update UI immediately
     await this.fetchTasks();
     this.notify();
-
-    await this.logAction('CREATE', `Nova tarefa: ${task.plannedActivity}`);
+    await this.logAction('CREATE', `Nova atividade: ${task.plannedActivity}`);
   }
 
   async updateTask(id: string, updates: Partial<Task>) {
@@ -316,11 +315,9 @@ class SupabaseService {
     const { error } = await supabase.from('tasks').update(dbUpdates).eq('id', id);
     if (error) throw new Error(`Erro ao atualizar tarefa: ${error.message}`);
     
-    // Explicit fetch and notify to update UI immediately
     await this.fetchTasks();
     this.notify();
-
-    await this.logAction('UPDATE', `Tarefa atualizada`);
+    await this.logAction('UPDATE', `Atividade atualizada`);
   }
 
   async toggleTaskCompletion(id: string) {
@@ -328,7 +325,6 @@ class SupabaseService {
     if (!task) return;
     
     const newStatus = task.status === Status.COMPLETED ? Status.PENDING : Status.COMPLETED;
-    // Se completar e não tiver entrega, copia o planejado
     const newDelivered = newStatus === Status.COMPLETED && !task.deliveredActivity 
        ? task.plannedActivity 
        : task.deliveredActivity;
@@ -340,11 +336,56 @@ class SupabaseService {
     const { error } = await supabase.from('tasks').delete().eq('id', id);
     if (error) throw new Error(`Erro ao excluir tarefa: ${error.message}`);
     
-    // Explicit fetch and notify to update UI immediately
     await this.fetchTasks();
     this.notify();
+    await this.logAction('DELETE', 'Atividade removida');
+  }
 
-    await this.logAction('DELETE', 'Tarefa removida');
+  // --- NEW ACTIONS FOR BOARD TASKS ---
+  async createBoardTask(task: Omit<BoardTask, 'id' | 'updatedAt'>) {
+    const dbTask = {
+       title: task.title,
+       description: task.description,
+       start_date: task.startDate,
+       end_date: task.endDate,
+       member_ids: task.memberIds, // JSONB or Array in Supabase
+       subtasks: task.subtasks,    // JSONB in Supabase
+       status: task.status,
+       updated_at: new Date().toISOString()
+    };
+
+    const { error } = await supabase.from('board_tasks').insert(dbTask);
+    if (error) throw new Error(`Erro ao criar tarefa do quadro: ${error.message}`);
+    
+    await this.fetchBoardTasks();
+    this.notify();
+    await this.logAction('CREATE', `Novo quadro: ${task.title}`);
+  }
+
+  async updateBoardTask(id: string, updates: Partial<BoardTask>) {
+    const dbUpdates: any = { updated_at: new Date().toISOString() };
+    if (updates.title) dbUpdates.title = updates.title;
+    if (updates.description) dbUpdates.description = updates.description;
+    if (updates.startDate) dbUpdates.start_date = updates.startDate;
+    if (updates.endDate) dbUpdates.end_date = updates.endDate;
+    if (updates.memberIds) dbUpdates.member_ids = updates.memberIds;
+    if (updates.subtasks) dbUpdates.subtasks = updates.subtasks;
+    if (updates.status) dbUpdates.status = updates.status;
+
+    const { error } = await supabase.from('board_tasks').update(dbUpdates).eq('id', id);
+    if (error) throw new Error(`Erro ao atualizar quadro: ${error.message}`);
+
+    await this.fetchBoardTasks();
+    this.notify();
+  }
+
+  async deleteBoardTask(id: string) {
+     const { error } = await supabase.from('board_tasks').delete().eq('id', id);
+     if (error) throw new Error(`Erro ao excluir tarefa do quadro: ${error.message}`);
+     
+     await this.fetchBoardTasks();
+     this.notify();
+     await this.logAction('DELETE', 'Tarefa do quadro removida');
   }
 
   // SECTORS & PROJECTS
@@ -403,7 +444,6 @@ class SupabaseService {
       description,
       timestamp: new Date().toISOString()
     });
-    // Also fetch logs immediately to update the widget
     await this.fetchLogs();
     this.notify();
   }
@@ -443,6 +483,21 @@ class SupabaseService {
       notes: db.notes,
       updatedAt: db.updated_at
     };
+  }
+  
+  // NEW Mapper
+  private mapDbToBoardTask(db: any): BoardTask {
+      return {
+          id: db.id,
+          title: db.title,
+          description: db.description,
+          startDate: db.start_date,
+          endDate: db.end_date,
+          memberIds: db.member_ids || [], // Ensure array
+          status: db.status as BoardStatus,
+          subtasks: db.subtasks || [],    // Ensure array
+          updatedAt: db.updated_at
+      }
   }
 
   private mapProfileToUser(p: any): User {

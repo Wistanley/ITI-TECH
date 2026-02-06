@@ -67,3 +67,25 @@ export interface SystemSettings {
   logoUrl: string | null;
   faviconUrl: string | null;
 }
+
+// --- New Types for Task Board ---
+
+export interface Subtask {
+  id: string;
+  title: string;
+  completed: boolean;
+}
+
+export type BoardStatus = 'TODO' | 'DOING' | 'DONE';
+
+export interface BoardTask {
+  id: string;
+  title: string;
+  description: string;
+  startDate: string;
+  endDate: string;
+  memberIds: string[]; // Supports multiple members
+  status: BoardStatus;
+  subtasks: Subtask[];
+  updatedAt: string;
+}

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 // SWITCH TO REAL BACKEND
 import { backend } from './services/supabaseBackend'; 
-import { Task, User, ActivityLog, Status, Sector, Project, SystemSettings } from './types';
+import { Task, User, ActivityLog, Status, Sector, Project, SystemSettings, BoardTask } from './types';
 import { ActivityLogWidget } from './components/ActivityLogWidget';
 import { TaskModal } from './components/TaskModal';
 import { SettingsView } from './components/SettingsView';
@@ -10,6 +10,7 @@ import { WeeklyPlanningView } from './components/WeeklyPlanningView';
 import { DashboardAnalytics } from './components/DashboardAnalytics';
 import { ActivitiesView } from './components/ActivitiesView';
 import { ProfileView } from './components/ProfileView';
+import { BoardView } from './components/BoardView'; // NEW IMPORT
 import { 
   LayoutDashboard, 
   CalendarDays, 
@@ -22,7 +23,8 @@ import {
   ArrowRight,
   FolderOpen,
   Download,
-  Settings
+  Settings,
+  Kanban // NEW ICON
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -149,6 +151,7 @@ export default function App() {
   
   // Data State
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [boardTasks, setBoardTasks] = useState<BoardTask[]>([]); // NEW STATE
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
@@ -158,7 +161,7 @@ export default function App() {
   const [logoError, setLogoError] = useState(false);
   
   // UI State
-  const [currentView, setCurrentView] = useState<'dashboard' | 'activities' | 'planning' | 'settings' | 'profile'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'activities' | 'planning' | 'board' | 'settings' | 'profile'>('dashboard');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [duplicatingTask, setDuplicatingTask] = useState<Task | null>(null);
@@ -181,6 +184,7 @@ export default function App() {
     const refreshData = () => {
       setUsers(backend.getUsers());
       setTasks(backend.getTasks());
+      setBoardTasks(backend.getBoardTasks()); // NEW GETTER
       setLogs(backend.getLogs());
       setSectors(backend.getSectors());
       setProjects(backend.getProjects());
@@ -234,6 +238,7 @@ export default function App() {
     backend.logout();
     // Clear all local state to ensure no stale data appears on next login
     setTasks([]);
+    setBoardTasks([]);
     setLogs([]);
     setUsers([]);
     setSectors([]);
@@ -401,6 +406,14 @@ export default function App() {
           </button>
 
            <button 
+            onClick={() => setCurrentView('board')}
+            className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg border font-medium transition-all ${currentView === 'board' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'}`}
+          >
+            <Kanban size={18} />
+            <span>Quadro</span>
+          </button>
+
+           <button 
             onClick={() => setCurrentView('settings')}
             className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg border font-medium transition-all ${currentView === 'settings' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'}`}
           >
@@ -436,6 +449,7 @@ export default function App() {
             {currentView === 'dashboard' && 'Visão Geral (Analytics)'}
             {currentView === 'activities' && 'Lista de Atividades'}
             {currentView === 'planning' && 'Agenda Semanal'}
+            {currentView === 'board' && 'Quadro de Tarefas'}
             {currentView === 'settings' && 'Gerenciamento'}
             {currentView === 'profile' && 'Perfil do Usuário'}
           </h1>
@@ -499,6 +513,11 @@ export default function App() {
             {/* VIEW: PLANNING */}
             {currentView === 'planning' && (
               <WeeklyPlanningView tasks={tasks} projects={projects} currentUser={currentUser} />
+            )}
+            
+            {/* VIEW: BOARD (NEW) */}
+            {currentView === 'board' && (
+              <BoardView tasks={boardTasks} users={users} />
             )}
 
             {/* VIEW: SETTINGS */}
