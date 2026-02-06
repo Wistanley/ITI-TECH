@@ -30,16 +30,15 @@ class SupabaseService {
 
   constructor() {
     // Initialize Gemini
-    // NOTE: In a real prod environment, keep the API key safe. 
-    // Since this is a request to integrate based on provided env rules:
-    
     // VITE REQUIREMENT: Env vars must start with VITE_ to be exposed to the client
+    // We check import.meta.env (Vite standard) first.
     const apiKey = (import.meta as any).env?.VITE_API_KEY || process.env.API_KEY;
 
     if (apiKey) {
+      console.log("Gemini API Key detectada:", apiKey.substring(0, 5) + "...");
       this.ai = new GoogleGenAI({ apiKey });
     } else {
-      console.warn("Gemini API Key missing (Checked VITE_API_KEY). Chat features will be disabled.");
+      console.warn("Gemini API Key não encontrada. Verifique se a variável VITE_API_KEY está configurada no .env ou Vercel.");
     }
   }
 
@@ -375,8 +374,9 @@ class SupabaseService {
           const currentPrompt = `O usuário ${this.currentUser.name} disse: ${content}`;
 
           // CALL GEMINI
+          // Using gemini-2.5-flash which is generally stable
           const response = await this.ai.models.generateContent({
-              model: 'gemini-2.5-flash-latest', // Fast model for chat
+              model: 'gemini-2.5-flash', 
               contents: [
                 {
                     role: 'user',
@@ -399,11 +399,16 @@ class SupabaseService {
 
       } catch (err: any) {
           console.error("Chat Error:", err);
+          
+          let errorMsg = "Desculpe, ocorreu um erro ao processar sua solicitação com a IA.";
+          if (err.message?.includes('404')) errorMsg += " (Modelo de IA não encontrado)";
+          if (err.message?.includes('403')) errorMsg += " (Chave de API inválida)";
+
           // Insert Error Message as AI response just to release lock gracefully visually
           await supabase.from('chat_messages').insert({
               user_id: null,
               role: 'model',
-              content: "Desculpe, ocorreu um erro ao processar sua solicitação com a IA."
+              content: errorMsg
           });
       } finally {
           // Unlock the chat regardless of success/fail

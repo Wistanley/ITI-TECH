@@ -51,23 +51,39 @@ export const ChatView: React.FC<Props> = ({ messages, chatState, currentUser, us
             <div className="w-16 h-16 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-indigo-500/20">
                <KeyRound className="text-white" size={32} />
             </div>
-            <h2 className="text-2xl font-bold text-white mb-2">Configuração Necessária</h2>
+            <h2 className="text-2xl font-bold text-white mb-2">Ação Necessária na Vercel</h2>
             <p className="text-slate-400 mb-6">
-              Para utilizar o Chat Colaborativo, é necessário configurar a API Key do Google Gemini no seu ambiente.
+              Para que o sistema consiga ler sua chave de API, você precisa renomear a variável nas configurações do projeto.
             </p>
             
-            <div className="bg-navy-900 border border-slate-800 rounded-lg p-4 text-left mb-6 font-mono text-sm relative group">
-               <p className="text-slate-500 mb-2 text-xs uppercase font-bold">Adicione nas Variáveis de Ambiente (Vercel/.env)</p>
-               <code className="text-emerald-400 block break-all">VITE_API_KEY=sua_chave_do_aistudio</code>
+            <div className="bg-navy-900 border border-slate-800 rounded-lg p-4 text-left mb-6 font-mono text-sm relative group space-y-4">
+               <div>
+                 <p className="text-slate-500 mb-1 text-xs uppercase font-bold">1. Acesse na Vercel</p>
+                 <p className="text-slate-300">Settings &gt; Environment Variables</p>
+               </div>
+               
+               <div>
+                  <p className="text-slate-500 mb-1 text-xs uppercase font-bold">2. Renomeie a variável</p>
+                  <div className="flex items-center gap-2">
+                     <span className="text-rose-400 line-through">API_KEY</span>
+                     <span className="text-slate-500">→</span>
+                     <span className="text-emerald-400 font-bold">VITE_API_KEY</span>
+                  </div>
+               </div>
+
+               <div>
+                 <p className="text-slate-500 mb-1 text-xs uppercase font-bold">3. Redploy</p>
+                 <p className="text-slate-300">Faça um novo deploy para aplicar a mudança.</p>
+               </div>
             </div>
 
             <a 
-              href="https://aistudio.google.com/app/apikey" 
+              href="https://vercel.com/dashboard" 
               target="_blank" 
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl font-medium transition-all hover:scale-105"
             >
-              Gerar Chave no Google AI Studio
+              Ir para Vercel Dashboard
               <ExternalLink size={16} />
             </a>
          </div>
