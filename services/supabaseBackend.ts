@@ -26,13 +26,18 @@ class SupabaseService {
   private initialized = false;
 
   // Gemini Client
-  private ai: GoogleGenAI;
+  private ai: GoogleGenAI | null = null;
 
   constructor() {
     // Initialize Gemini
     // NOTE: In a real prod environment, keep the API key safe. 
     // Since this is a request to integrate based on provided env rules:
-    this.ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+    const apiKey = process.env.API_KEY;
+    if (apiKey) {
+      this.ai = new GoogleGenAI({ apiKey });
+    } else {
+      console.warn("Gemini API Key missing. Chat features will be disabled.");
+    }
   }
 
   // --- Auth Wrapper ---
@@ -322,6 +327,9 @@ class SupabaseService {
   
   async sendChatMessage(content: string) {
       if (!this.currentUser) return;
+      if (!this.ai) {
+        throw new Error("Chat indisponível: API Key não configurada.");
+      }
       
       // 1. Try to acquire Lock (Optimistic UI handled by component, but DB enforces truth)
       // Check current lock
