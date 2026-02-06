@@ -208,7 +208,7 @@ class SupabaseService {
       this.fetchProjects(),
       this.fetchTasks(),
       this.fetchBoardTasks(), 
-      this.fetchChatChannels(), // NEW
+      this.fetchChatChannels(), 
       this.fetchChatMessages(), 
       this.fetchLogs(),
       this.fetchSystemSettings()
@@ -225,7 +225,7 @@ class SupabaseService {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, () => this.fetchProjects().then(() => this.notify()))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sectors' }, () => this.fetchSectors().then(() => this.notify()))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => this.fetchUsers().then(() => this.notify()))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_channels' }, () => this.fetchChatChannels().then(() => this.notify())) // NEW
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_channels' }, () => this.fetchChatChannels().then(() => this.notify()))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, () => this.fetchChatMessages().then(() => this.notify())) 
       .subscribe();
   }
@@ -277,13 +277,11 @@ class SupabaseService {
 
   // Chat Fetchers
   private async fetchChatChannels() {
-      // In a real scenario, we'd select from 'chat_channels' table
-      // If table doesn't exist, this might fail, so we wrap in try/catch or handle gracefully
       try {
           const { data, error } = await supabase.from('chat_channels').select('*').order('created_at', { ascending: true });
           if (error) {
-              console.warn("Could not fetch chat channels (Table might be missing):", error.message);
-              // Fallback for demo if table missing: Provide one local channel
+              console.warn("Could not fetch chat channels:", error.message);
+              // Fallback
               if(this.chatChannels.length === 0) {
                  this.chatChannels = [{
                      id: 'general-channel-id',
@@ -314,8 +312,7 @@ class SupabaseService {
   }
 
   private async fetchChatMessages() {
-      // Fetch latest 100 messages globally (client filters by channel)
-      // Or we could fetch per channel on selection. For simplicity, fetch recent global.
+      // Fetch latest 200 messages globally 
       const { data } = await supabase.from('chat_messages').select('*').order('created_at', { ascending: true }).limit(200);
       if (data) {
           this.chatMessages = data.map(msg => ({
@@ -347,8 +344,10 @@ class SupabaseService {
   getUsers() { return this.users; }
   getLogs() { return this.logs; }
   getSettings() { return this.settings; }
+  
+  // FIX: Return all messages if no channelId provided
   getChatMessages(channelId?: string) { 
-      if (!channelId) return [];
+      if (!channelId) return this.chatMessages;
       return this.chatMessages.filter(m => m.channelId === channelId); 
   }
   getChatChannels() { return this.chatChannels; }
@@ -372,7 +371,6 @@ class SupabaseService {
   async deleteChatChannel(id: string) {
      if (confirm("Excluir este canal e todas as mensagens?")) {
          await supabase.from('chat_channels').delete().eq('id', id);
-         // Cascade delete messages usually handled by DB, but explicit here if needed
          await supabase.from('chat_messages').delete().eq('channel_id', id);
          await this.fetchChatChannels();
          this.notify();
@@ -385,11 +383,11 @@ class SupabaseService {
         throw new Error("Chat indisponível: API Key não configurada.");
       }
       
-      // Find current channel state
+      // Find current channel state (use local cache for immediate check)
       const channel = this.chatChannels.find(c => c.id === channelId);
       if (!channel) throw new Error("Canal não encontrado.");
 
-      // Check lock
+      // Check lock locally first
       if (channel.isLocked) throw new Error("O chat está bloqueado por outro usuário.");
 
       try {

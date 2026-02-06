@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 // SWITCH TO REAL BACKEND
 import { backend } from './services/supabaseBackend'; 
-import { Task, User, ActivityLog, Status, Sector, Project, SystemSettings, BoardTask, ChatMessage } from './types';
+import { Task, User, ActivityLog, Status, Sector, Project, SystemSettings, BoardTask, ChatMessage, ChatChannel } from './types';
 import { ActivityLogWidget } from './components/ActivityLogWidget';
 import { TaskModal } from './components/TaskModal';
 import { SettingsView } from './components/SettingsView';
@@ -164,6 +164,7 @@ export default function App() {
 
   // Chat Data
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatChannels, setChatChannels] = useState<ChatChannel[]>([]);
   
   // UI State
   const [currentView, setCurrentView] = useState<'dashboard' | 'activities' | 'planning' | 'board' | 'chat' | 'settings' | 'profile'>('dashboard');
@@ -194,7 +195,8 @@ export default function App() {
       setSectors(backend.getSectors());
       setProjects(backend.getProjects());
       setSettings(backend.getSettings());
-      setChatMessages(backend.getChatMessages()); // NEW
+      setChatMessages(backend.getChatMessages()); 
+      setChatChannels(backend.getChatChannels()); // New State
       setLogoError(false); 
       
       // Sync currentUser state with backend if profile updated
@@ -248,6 +250,7 @@ export default function App() {
     setSectors([]);
     setProjects([]);
     setChatMessages([]);
+    setChatChannels([]);
     setCurrentUser(null);
   };
 
@@ -538,6 +541,7 @@ export default function App() {
             {currentView === 'chat' && (
                <ChatView 
                   messages={chatMessages} 
+                  channels={chatChannels}
                   currentUser={currentUser} 
                   users={users}
                />

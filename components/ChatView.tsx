@@ -7,11 +7,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 interface Props {
   messages: ChatMessage[];
+  channels: ChatChannel[];
   currentUser: User;
   users: User[];
 }
 
-export const ChatView: React.FC<Props> = ({ messages: allMessages, currentUser, users }) => {
+export const ChatView: React.FC<Props> = ({ messages, channels, currentUser, users }) => {
   const [input, setInput] = useState('');
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
   const [newChannelName, setNewChannelName] = useState('');
@@ -20,24 +21,22 @@ export const ChatView: React.FC<Props> = ({ messages: allMessages, currentUser, 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isAiConfigured = backend.isGeminiConfigured();
 
-  const channels = backend.getChatChannels();
-
-  // Initialize selection
+  // Initialize selection using props, not backend directly
   useEffect(() => {
     if (channels.length > 0 && !selectedChannelId) {
       setSelectedChannelId(channels[0].id);
     }
   }, [channels, selectedChannelId]);
 
-  // Filter messages for current channel
+  // Filter messages from props for current channel
   const activeMessages = selectedChannelId 
-     ? backend.getChatMessages(selectedChannelId)
+     ? messages.filter(m => m.channelId === selectedChannelId)
      : [];
 
-  // Get current channel object
+  // Get current channel object from props
   const activeChannel = channels.find(c => c.id === selectedChannelId);
 
-  // Auto-scroll
+  // Auto-scroll on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeMessages.length, activeChannel?.isLocked]); 
