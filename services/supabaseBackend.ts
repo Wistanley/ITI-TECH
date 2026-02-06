@@ -421,9 +421,9 @@ class SupabaseService {
           
           const currentPrompt = `O usuário ${this.currentUser.name} disse: ${content}`;
 
-          // CALL GEMINI
+          // CALL GEMINI - UPGRADED TO 3.0
           const response = await this.ai.models.generateContent({
-              model: 'gemini-2.5-flash', 
+              model: 'gemini-3-flash-preview', 
               contents: [
                 {
                     role: 'user',

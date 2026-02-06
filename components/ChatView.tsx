@@ -181,7 +181,7 @@ export const ChatView: React.FC<Props> = ({ messages, channels, currentUser, use
                       <h2 className="text-lg font-bold text-white flex items-center gap-2">
                          #{activeChannel.name}
                       </h2>
-                      <p className="text-xs text-slate-400">Gemini 2.5 Active</p>
+                      <p className="text-xs text-slate-400">Gemini 3.0 Active</p>
                    </div>
                 </div>
                 
