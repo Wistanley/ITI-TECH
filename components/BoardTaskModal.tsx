@@ -148,6 +148,7 @@ export const BoardTaskModal: React.FC<Props> = ({ isOpen, onClose, taskToEdit, u
                    <option value="TODO">A Fazer</option>
                    <option value="DOING">Em Progresso</option>
                    <option value="DONE">Concluído</option>
+                   <option value="CANCELED">Cancelado</option>
                  </select>
                </div>
             </div>

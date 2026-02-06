@@ -19,6 +19,7 @@ export const BoardView: React.FC<Props> = ({ tasks, users }) => {
     { id: 'TODO', title: 'A Fazer', color: 'bg-slate-500' },
     { id: 'DOING', title: 'Em Progresso', color: 'bg-blue-500' },
     { id: 'DONE', title: 'Concluído', color: 'bg-emerald-500' },
+    { id: 'CANCELED', title: 'Cancelado', color: 'bg-rose-500' },
   ];
 
   const handleCreate = () => {
@@ -68,7 +69,7 @@ export const BoardView: React.FC<Props> = ({ tasks, users }) => {
       </header>
 
       <div className="flex-1 overflow-x-auto custom-scrollbar pb-2">
-         <div className="flex gap-6 h-full min-w-[1000px]">
+         <div className="flex gap-6 h-full min-w-[1300px]">
             {columns.map(col => {
                const colTasks = tasks.filter(t => t.status === col.id);
                return (

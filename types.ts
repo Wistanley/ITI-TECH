@@ -76,7 +76,7 @@ export interface Subtask {
   completed: boolean;
 }
 
-export type BoardStatus = 'TODO' | 'DOING' | 'DONE';
+export type BoardStatus = 'TODO' | 'DOING' | 'DONE' | 'CANCELED';
 
 export interface BoardTask {
   id: string;
