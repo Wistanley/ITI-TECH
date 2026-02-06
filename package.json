@@ -13,7 +13,8 @@
     "react-dom": "^19.2.4",
     "lucide-react": "^0.563.0",
     "framer-motion": "^12.31.0",
-    "@supabase/supabase-js": "^2.94.1"
+    "@supabase/supabase-js": "^2.94.1",
+    "@google/genai": "^1.40.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

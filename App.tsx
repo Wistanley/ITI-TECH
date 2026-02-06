@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 // SWITCH TO REAL BACKEND
 import { backend } from './services/supabaseBackend'; 
-import { Task, User, ActivityLog, Status, Sector, Project, SystemSettings, BoardTask } from './types';
+import { Task, User, ActivityLog, Status, Sector, Project, SystemSettings, BoardTask, ChatMessage, ChatState } from './types';
 import { ActivityLogWidget } from './components/ActivityLogWidget';
 import { TaskModal } from './components/TaskModal';
 import { SettingsView } from './components/SettingsView';
@@ -10,7 +10,8 @@ import { WeeklyPlanningView } from './components/WeeklyPlanningView';
 import { DashboardAnalytics } from './components/DashboardAnalytics';
 import { ActivitiesView } from './components/ActivitiesView';
 import { ProfileView } from './components/ProfileView';
-import { BoardView } from './components/BoardView'; // NEW IMPORT
+import { BoardView } from './components/BoardView'; 
+import { ChatView } from './components/ChatView'; // NEW IMPORT
 import { 
   LayoutDashboard, 
   CalendarDays, 
@@ -24,7 +25,8 @@ import {
   FolderOpen,
   Download,
   Settings,
-  Kanban // NEW ICON
+  Kanban,
+  MessageSquare // NEW ICON
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -151,7 +153,7 @@ export default function App() {
   
   // Data State
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [boardTasks, setBoardTasks] = useState<BoardTask[]>([]); // NEW STATE
+  const [boardTasks, setBoardTasks] = useState<BoardTask[]>([]); 
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
@@ -159,9 +161,13 @@ export default function App() {
   const [isLoadingSession, setIsLoadingSession] = useState(true);
   const [settings, setSettings] = useState<SystemSettings>({ logoUrl: null, faviconUrl: null });
   const [logoError, setLogoError] = useState(false);
+
+  // Chat Data
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatState, setChatState] = useState<ChatState>({ isLocked: false, lockedByUserId: null, updatedAt: '' });
   
   // UI State
-  const [currentView, setCurrentView] = useState<'dashboard' | 'activities' | 'planning' | 'board' | 'settings' | 'profile'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'activities' | 'planning' | 'board' | 'chat' | 'settings' | 'profile'>('dashboard');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [duplicatingTask, setDuplicatingTask] = useState<Task | null>(null);
@@ -184,18 +190,18 @@ export default function App() {
     const refreshData = () => {
       setUsers(backend.getUsers());
       setTasks(backend.getTasks());
-      setBoardTasks(backend.getBoardTasks()); // NEW GETTER
+      setBoardTasks(backend.getBoardTasks());
       setLogs(backend.getLogs());
       setSectors(backend.getSectors());
       setProjects(backend.getProjects());
       setSettings(backend.getSettings());
+      setChatMessages(backend.getChatMessages()); // NEW
+      setChatState(backend.getChatState()); // NEW
       setLogoError(false); 
       
       // Sync currentUser state with backend if profile updated
       if (backend.currentUser && backend.currentUser.id === currentUser.id) {
-         // This triggers re-render only if object is different
          setCurrentUser(prev => {
-             // Avoid loop if deep equal or same ref, but backend.currentUser usually is stable or updated by action
              if (JSON.stringify(prev) !== JSON.stringify(backend.currentUser)) {
                  return backend.currentUser;
              }
@@ -243,6 +249,7 @@ export default function App() {
     setUsers([]);
     setSectors([]);
     setProjects([]);
+    setChatMessages([]);
     setCurrentUser(null);
   };
 
@@ -413,6 +420,14 @@ export default function App() {
             <span>Quadro</span>
           </button>
 
+          <button 
+            onClick={() => setCurrentView('chat')}
+            className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg border font-medium transition-all ${currentView === 'chat' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'}`}
+          >
+            <MessageSquare size={18} />
+            <span>Chat IA</span>
+          </button>
+
            <button 
             onClick={() => setCurrentView('settings')}
             className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg border font-medium transition-all ${currentView === 'settings' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'}`}
@@ -450,6 +465,7 @@ export default function App() {
             {currentView === 'activities' && 'Lista de Atividades'}
             {currentView === 'planning' && 'Agenda Semanal'}
             {currentView === 'board' && 'Quadro de Tarefas'}
+            {currentView === 'chat' && 'Chat Colaborativo'}
             {currentView === 'settings' && 'Gerenciamento'}
             {currentView === 'profile' && 'Perfil do Usuário'}
           </h1>
@@ -515,9 +531,19 @@ export default function App() {
               <WeeklyPlanningView tasks={tasks} projects={projects} currentUser={currentUser} />
             )}
             
-            {/* VIEW: BOARD (NEW) */}
+            {/* VIEW: BOARD */}
             {currentView === 'board' && (
               <BoardView tasks={boardTasks} users={users} />
+            )}
+
+            {/* VIEW: CHAT (NEW) */}
+            {currentView === 'chat' && (
+               <ChatView 
+                  messages={chatMessages} 
+                  chatState={chatState} 
+                  currentUser={currentUser} 
+                  users={users}
+               />
             )}
 
             {/* VIEW: SETTINGS */}

@@ -89,3 +89,20 @@ export interface BoardTask {
   subtasks: Subtask[];
   updatedAt: string;
 }
+
+// --- New Types for Chat ---
+
+export interface ChatMessage {
+  id: string;
+  userId: string | null; // Null if AI
+  role: 'user' | 'model';
+  content: string;
+  createdAt: string;
+  user?: User; // Hydrated user data
+}
+
+export interface ChatState {
+  isLocked: boolean;
+  lockedByUserId: string | null;
+  updatedAt: string;
+}

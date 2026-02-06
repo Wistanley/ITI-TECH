@@ -1,6 +1,7 @@
 
 import { supabase } from '../lib/supabaseClient';
-import { Task, User, ActivityLog, Status, Priority, Sector, Project, SystemSettings, BoardTask, BoardStatus, Subtask } from '../types';
+import { Task, User, ActivityLog, Status, Priority, Sector, Project, SystemSettings, BoardTask, BoardStatus, Subtask, ChatMessage, ChatState } from '../types';
+import { GoogleGenAI } from "@google/genai";
 
 class SupabaseService {
   private tasks: Task[] = [];
@@ -9,6 +10,10 @@ class SupabaseService {
   private users: User[] = [];
   private logs: ActivityLog[] = [];
   
+  // Chat Data
+  private chatMessages: ChatMessage[] = [];
+  private chatState: ChatState = { isLocked: false, lockedByUserId: null, updatedAt: new Date().toISOString() };
+
   // New Cache for Board Tasks
   private boardTasks: BoardTask[] = [];
 
@@ -20,8 +25,14 @@ class SupabaseService {
   public currentUser: User | null = null;
   private initialized = false;
 
+  // Gemini Client
+  private ai: GoogleGenAI;
+
   constructor() {
-    // Não inicializamos no construtor para evitar efeitos colaterais antes do auth
+    // Initialize Gemini
+    // NOTE: In a real prod environment, keep the API key safe. 
+    // Since this is a request to integrate based on provided env rules:
+    this.ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
   }
 
   // --- Auth Wrapper ---
@@ -75,6 +86,7 @@ class SupabaseService {
     this.sectors = [];
     this.projects = [];
     this.users = [];
+    this.chatMessages = [];
     this.initialized = false;
     this.notify();
   }
@@ -191,7 +203,9 @@ class SupabaseService {
       this.fetchSectors(),
       this.fetchProjects(),
       this.fetchTasks(),
-      this.fetchBoardTasks(), // NEW
+      this.fetchBoardTasks(), 
+      this.fetchChatMessages(), // NEW
+      this.fetchChatState(), // NEW
       this.fetchLogs(),
       this.fetchSystemSettings()
     ]);
@@ -202,11 +216,13 @@ class SupabaseService {
     // 2. Setup Realtime Subscription
     supabase.channel('public-db-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => this.fetchTasks().then(() => this.notify()))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'board_tasks' }, () => this.fetchBoardTasks().then(() => this.notify())) // NEW
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'board_tasks' }, () => this.fetchBoardTasks().then(() => this.notify()))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'activity_logs' }, () => this.fetchLogs().then(() => this.notify()))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, () => this.fetchProjects().then(() => this.notify()))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sectors' }, () => this.fetchSectors().then(() => this.notify()))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => this.fetchUsers().then(() => this.notify()))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, () => this.fetchChatMessages().then(() => this.notify())) // NEW
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_state' }, () => this.fetchChatState().then(() => this.notify())) // NEW
       .subscribe();
   }
 
@@ -228,7 +244,6 @@ class SupabaseService {
     if (data) this.tasks = data.map(this.mapDbToTask);
   }
 
-  // NEW: Fetch Board Tasks
   private async fetchBoardTasks() {
     const { data } = await supabase.from('board_tasks').select('*').order('updated_at', { ascending: false });
     if (data) this.boardTasks = data.map(this.mapDbToBoardTask);
@@ -256,6 +271,33 @@ class SupabaseService {
     }));
   }
 
+  // Chat Fetchers
+  private async fetchChatMessages() {
+      // Fetch latest 50 messages
+      const { data } = await supabase.from('chat_messages').select('*').order('created_at', { ascending: true }).limit(50);
+      if (data) {
+          this.chatMessages = data.map(msg => ({
+              id: msg.id,
+              userId: msg.user_id,
+              role: msg.role,
+              content: msg.content,
+              createdAt: msg.created_at,
+              user: this.users.find(u => u.id === msg.user_id) // Hydrate user
+          }));
+      }
+  }
+
+  private async fetchChatState() {
+      const { data } = await supabase.from('chat_state').select('*').eq('id', 1).single();
+      if (data) {
+          this.chatState = {
+              isLocked: data.is_locked,
+              lockedByUserId: data.locked_by_user_id,
+              updatedAt: data.updated_at
+          };
+      }
+  }
+
   private async fetchSystemSettings() {
       const { data: logoData } = supabase.storage.from('images').getPublicUrl('system/app_logo.png');
       const { data: faviconData } = supabase.storage.from('images').getPublicUrl('system/app_favicon.png');
@@ -267,12 +309,97 @@ class SupabaseService {
 
   // --- Getters ---
   getTasks() { return this.tasks; }
-  getBoardTasks() { return this.boardTasks; } // NEW
+  getBoardTasks() { return this.boardTasks; }
   getSectors() { return this.sectors; }
   getProjects() { return this.projects; }
   getUsers() { return this.users; }
   getLogs() { return this.logs; }
   getSettings() { return this.settings; }
+  getChatMessages() { return this.chatMessages; }
+  getChatState() { return this.chatState; }
+
+  // --- Chat Actions ---
+  
+  async sendChatMessage(content: string) {
+      if (!this.currentUser) return;
+      
+      // 1. Try to acquire Lock (Optimistic UI handled by component, but DB enforces truth)
+      // Check current lock
+      if (this.chatState.isLocked) throw new Error("O chat está bloqueado por outro usuário.");
+
+      try {
+          // Lock the chat in DB
+          await supabase.from('chat_state').update({
+              is_locked: true,
+              locked_by_user_id: this.currentUser.id,
+              updated_at: new Date().toISOString()
+          }).eq('id', 1);
+          
+          // Insert User Message
+          await supabase.from('chat_messages').insert({
+              user_id: this.currentUser.id,
+              role: 'user',
+              content: content
+          });
+
+          // PREPARE CONTEXT FOR GEMINI
+          // Fetch updated history or use local + current message
+          // We need to format the history so Gemini knows WHO said WHAT.
+          // Gemini doesn't strictly support multi-user roles in the API schema yet (only user/model),
+          // so we simulate it by prepending names in the 'user' content.
+          const historyLimit = 10;
+          const contextMessages = this.chatMessages.slice(-historyLimit);
+          
+          let historyPrompt = "Histórico da conversa:\n";
+          contextMessages.forEach(msg => {
+              const name = msg.user ? msg.user.name : "Gemini AI";
+              historyPrompt += `${name}: ${msg.content}\n`;
+          });
+          
+          // Current Prompt with User Identity
+          const currentPrompt = `O usuário ${this.currentUser.name} disse: ${content}`;
+
+          // CALL GEMINI
+          const response = await this.ai.models.generateContent({
+              model: 'gemini-2.5-flash-latest', // Fast model for chat
+              contents: [
+                {
+                    role: 'user',
+                    parts: [{ text: historyPrompt + "\n" + currentPrompt }]
+                }
+              ],
+              config: {
+                 systemInstruction: "Você é um assistente de IA colaborativo da equipe ITI TECH. Você está em um chat de grupo. Responda de forma concisa, profissional e útil. Identifique a quem você está respondendo se houver ambiguidade. O contexto da conversa anterior foi fornecido.",
+              }
+          });
+
+          const aiResponseText = response.text;
+
+          // Insert AI Message
+          await supabase.from('chat_messages').insert({
+              user_id: null,
+              role: 'model',
+              content: aiResponseText
+          });
+
+      } catch (err: any) {
+          console.error("Chat Error:", err);
+          // Insert Error Message as AI response just to release lock gracefully visually
+          await supabase.from('chat_messages').insert({
+              user_id: null,
+              role: 'model',
+              content: "Desculpe, ocorreu um erro ao processar sua solicitação com a IA."
+          });
+      } finally {
+          // Unlock the chat regardless of success/fail
+          await supabase.from('chat_state').update({
+              is_locked: false,
+              locked_by_user_id: null,
+              updated_at: new Date().toISOString()
+          }).eq('id', 1);
+      }
+  }
+
 
   // --- Actions ---
   
