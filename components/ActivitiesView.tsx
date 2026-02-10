@@ -33,6 +33,13 @@ export const ActivitiesView: React.FC<Props> = ({
      return projects.find(p => p.id === projectId)?.name || 'Projeto Desconhecido';
   };
 
+  // Helper to format YYYY-MM-DD to DD/MM/YYYY without timezone shift
+  const formatDate = (dateString: string) => {
+      if (!dateString) return '-';
+      const [year, month, day] = dateString.split('-');
+      return `${day}/${month}/${year}`;
+  };
+
   // Filtering Logic
   const filteredTasks = tasks.filter(t => {
     const projectName = getProjectName(t.projectId).toLowerCase();
@@ -167,7 +174,7 @@ export const ActivitiesView: React.FC<Props> = ({
                           <Badge type="status" value={task.status} />
                         </td>
                         <td className="px-6 py-4 text-slate-400 font-mono text-xs">
-                           {new Date(task.dueDate).toLocaleDateString('pt-BR')}
+                           {formatDate(task.dueDate)}
                         </td>
                         <td className="px-6 py-4 text-right font-mono text-slate-300">
                           {task.hoursDedicated}
