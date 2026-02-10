@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Task, Project, Status, Priority } from '../types';
 import { backend } from '../services/supabaseBackend';
-import { CalendarDays, CheckCircle2, Circle, Plus, AlertCircle, Briefcase } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Circle, Plus, AlertCircle, Briefcase, GripVertical } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface Props {
@@ -13,6 +13,9 @@ interface Props {
 
 export const WeeklyPlanningView: React.FC<Props> = ({ tasks, projects, currentUser }) => {
   const [addingToDate, setAddingToDate] = useState<string | null>(null);
+  
+  // Drag and Drop State
+  const [activeDropZone, setActiveDropZone] = useState<string | null>(null);
   
   // Quick Add State
   const [quickProjectId, setQuickProjectId] = useState('');
@@ -100,6 +103,44 @@ export const WeeklyPlanningView: React.FC<Props> = ({ tasks, projects, currentUs
     }
   };
 
+  // --- Drag and Drop Handlers ---
+  const handleDragStart = (e: React.DragEvent, taskId: string) => {
+    e.dataTransfer.setData("taskId", taskId);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDragEnter = (date: string) => {
+    setActiveDropZone(date);
+  };
+
+  const handleDragLeave = () => {
+    // setActiveDropZone(null); // Optional: keeping it strictly on drop usually feels better or using a debounce
+  };
+
+  const handleDrop = async (e: React.DragEvent, newDate: string) => {
+    e.preventDefault();
+    setActiveDropZone(null);
+    const taskId = e.dataTransfer.getData("taskId");
+    
+    if (taskId) {
+        const task = tasks.find(t => t.id === taskId);
+        // Only update if date actually changed
+        if (task && task.dueDate !== newDate) {
+             try {
+                await backend.updateTask(taskId, { dueDate: newDate });
+             } catch (err: any) {
+                console.error("Failed to move task", err);
+             }
+        }
+    }
+  };
+
+
   // Helper for Display Date (DD/MM) handling timezone correctly for display
   const formatDisplayDate = (isoDate: string) => {
      const [year, month, day] = isoDate.split('-').map(Number);
@@ -139,7 +180,7 @@ export const WeeklyPlanningView: React.FC<Props> = ({ tasks, projects, currentUs
              <CalendarDays className="text-primary" size={28} />
              Planejamento Semanal
            </h2>
-           <p className="text-slate-400 mt-1 text-sm">Organize suas entregas dia a dia. Marque o que foi concluído.</p>
+           <p className="text-slate-400 mt-1 text-sm">Arraste as tarefas entre os dias para reorganizar sua semana.</p>
         </div>
         <div className="text-right">
            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Semana (Seg-Sexta)</p>
@@ -153,11 +194,25 @@ export const WeeklyPlanningView: React.FC<Props> = ({ tasks, projects, currentUs
             const dayTasks = getTasksForDate(date);
             const isToday = todayISO === date;
             const isAdding = addingToDate === date;
+            const isDropActive = activeDropZone === date;
 
             return (
-              <div key={date} className={`flex-1 flex flex-col rounded-xl border ${isToday ? 'bg-navy-800/80 border-primary/30 shadow-[0_0_20px_rgba(14,165,233,0.05)]' : 'bg-navy-900/40 border-slate-800/60'}`}>
+              <div 
+                key={date} 
+                onDragOver={handleDragOver}
+                onDragEnter={() => handleDragEnter(date)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, date)}
+                className={`flex-1 flex flex-col rounded-xl border transition-colors duration-200 ${
+                    isDropActive 
+                      ? 'bg-primary/10 border-primary/50 shadow-[0_0_20px_rgba(14,165,233,0.15)]'
+                      : isToday 
+                        ? 'bg-navy-800/80 border-primary/30 shadow-[0_0_20px_rgba(14,165,233,0.05)]' 
+                        : 'bg-navy-900/40 border-slate-800/60'
+                }`}
+              >
                 {/* Column Header */}
-                <div className={`p-4 border-b ${isToday ? 'border-primary/20 bg-primary/5' : 'border-slate-800/60'} rounded-t-xl`}>
+                <div className={`p-4 border-b ${isToday ? 'border-primary/20 bg-primary/5' : 'border-slate-800/60'} rounded-t-xl select-none pointer-events-none`}>
                   <div className="flex items-center justify-between mb-1">
                     <span className={`text-sm font-bold uppercase tracking-wider ${isToday ? 'text-primary' : 'text-slate-400'}`}>
                       {weekDayNames[index]}
@@ -177,29 +232,43 @@ export const WeeklyPlanningView: React.FC<Props> = ({ tasks, projects, currentUs
                        return (
                          <motion.div
                            key={task.id}
-                           layout
+                           layoutId={task.id} // Enable smooth transition between columns
+                           draggable={!isDone} // Only pending/in-progress tasks can be dragged logic (optional, but good UX)
+                           onDragStart={(e) => {
+                               // Must cast type because framer-motion types are strict
+                               handleDragStart(e as unknown as React.DragEvent, task.id)
+                           }}
                            initial={{ opacity: 0, y: 10 }}
                            animate={{ opacity: 1, y: 0 }}
                            exit={{ opacity: 0, scale: 0.9 }}
-                           className={`p-3 rounded-lg border transition-all group ${
+                           whileHover={{ scale: 1.02 }}
+                           whileDrag={{ scale: 1.05, cursor: 'grabbing', zIndex: 50 }}
+                           className={`p-3 rounded-lg border transition-all group relative cursor-grab active:cursor-grabbing ${
                              isDone 
-                               ? 'bg-navy-900/30 border-slate-800 opacity-60' 
-                               : 'bg-navy-800 border-slate-700 hover:border-slate-600 shadow-lg'
+                               ? 'bg-navy-900/30 border-slate-800 opacity-60 pointer-events-none' // Disable drag for completed
+                               : 'bg-navy-800 border-slate-700 hover:border-slate-500 hover:shadow-lg'
                            }`}
                          >
+                           {/* Drag Handle Icon (Visual Cue) */}
+                           {!isDone && (
+                             <div className="absolute right-2 top-2 text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <GripVertical size={14} />
+                             </div>
+                           )}
+
                            <div className="flex items-start gap-3">
                              <button 
                                onClick={() => toggleCheck(task.id)}
-                               className={`mt-0.5 flex-shrink-0 transition-colors ${isDone ? 'text-emerald-500' : 'text-slate-600 hover:text-primary'}`}
+                               className={`mt-0.5 flex-shrink-0 transition-colors pointer-events-auto ${isDone ? 'text-emerald-500' : 'text-slate-600 hover:text-primary'}`}
                              >
                                {isDone ? <CheckCircle2 size={20} /> : <Circle size={20} />}
                              </button>
                              
-                             <div className="flex-1 min-w-0">
-                               <p className={`text-sm font-medium leading-snug break-words ${isDone ? 'text-slate-500 line-through decoration-slate-600' : 'text-slate-200'}`}>
+                             <div className="flex-1 min-w-0 pr-4">
+                               <p className={`text-sm font-medium leading-snug break-words select-none ${isDone ? 'text-slate-500 line-through decoration-slate-600' : 'text-slate-200'}`}>
                                  {task.plannedActivity}
                                </p>
-                               <div className="flex items-center gap-1.5 mt-2">
+                               <div className="flex items-center gap-1.5 mt-2 select-none">
                                   <span className="inline-flex items-center gap-1 text-[10px] text-blue-300 bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20 max-w-full truncate">
                                     <Briefcase size={10} />
                                     <span className="truncate">{project?.name || 'Geral'}</span>
@@ -214,6 +283,12 @@ export const WeeklyPlanningView: React.FC<Props> = ({ tasks, projects, currentUs
                        );
                     })}
                   </AnimatePresence>
+                  
+                  {isDropActive && dayTasks.length === 0 && (
+                     <div className="h-full flex items-center justify-center border-2 border-dashed border-primary/30 rounded-lg bg-primary/5">
+                        <span className="text-primary/50 text-xs font-medium">Solte aqui para mover</span>
+                     </div>
+                  )}
                 </div>
 
                 {/* Add Button / Form */}
