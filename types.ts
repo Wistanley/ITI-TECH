@@ -116,3 +116,17 @@ export interface ChatState {
   lockedByUserId: string | null;
   updatedAt: string;
 }
+
+// --- New Types for Weekly History ---
+
+export interface WeeklyHistory {
+  id: string;
+  startDate: string;
+  endDate: string;
+  totalHours: string;
+  tasksCompleted: number;
+  tasksPending: number;
+  tasks: Task[]; // Snapshot of tasks
+  boardTasks: BoardTask[]; // Snapshot of board tasks
+  createdAt: string;
+}

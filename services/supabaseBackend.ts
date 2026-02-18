@@ -1,6 +1,6 @@
 
 import { supabase } from '../lib/supabaseClient';
-import { Task, User, ActivityLog, Status, Priority, Sector, Project, SystemSettings, BoardTask, BoardStatus, Subtask, ChatMessage, ChatState, ChatChannel } from '../types';
+import { Task, User, ActivityLog, Status, Priority, Sector, Project, SystemSettings, BoardTask, BoardStatus, Subtask, ChatMessage, ChatState, ChatChannel, WeeklyHistory } from '../types';
 import { GoogleGenAI } from "@google/genai";
 
 class SupabaseService {
@@ -9,16 +9,17 @@ class SupabaseService {
   private projects: Project[] = [];
   private users: User[] = [];
   private logs: ActivityLog[] = [];
-  
+
   // Chat Data
   private chatChannels: ChatChannel[] = [];
   private chatMessages: ChatMessage[] = []; // Stores messages for ALL channels, filtered in UI or Getter
-  
+
   // New Cache for Board Tasks
   private boardTasks: BoardTask[] = [];
+  private weeklyHistory: WeeklyHistory[] = [];
 
   private listeners: Array<() => void> = [];
-  
+
   // Global System Settings
   public settings: SystemSettings = { logoUrl: null, faviconUrl: null };
 
@@ -59,7 +60,7 @@ class SupabaseService {
         .select('*')
         .eq('id', data.user.id)
         .single();
-        
+
       if (profile) {
         this.currentUser = this.mapProfileToUser(profile);
         await this.initializeData(); // Carregar dados iniciais
@@ -104,43 +105,43 @@ class SupabaseService {
 
   // --- Profile Management ---
   async updateProfile(id: string, updates: Partial<User>) {
-    const dbUpdates: any = { };
+    const dbUpdates: any = {};
     if (updates.name) dbUpdates.name = updates.name;
     if (updates.avatar) dbUpdates.avatar = updates.avatar;
     if (updates.sector) dbUpdates.sector = updates.sector;
 
     const { error } = await supabase.from('profiles').update(dbUpdates).eq('id', id);
-    
+
     if (error) throw new Error(error.message);
 
     // Update Local State
     if (this.currentUser && this.currentUser.id === id) {
-        this.currentUser = { ...this.currentUser, ...updates };
+      this.currentUser = { ...this.currentUser, ...updates };
     }
-    
+
     await this.fetchUsers(); // Refresh all users list
     this.notify();
   }
 
   async changePassword(oldPassword: string, newPassword: string) {
-     if (!this.currentUser) throw new Error("Usuário não autenticado.");
+    if (!this.currentUser) throw new Error("Usuário não autenticado.");
 
-     // 1. Verify Old Password by trying to Sign In (Re-auth)
-     const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: this.currentUser.email,
-        password: oldPassword
-     });
+    // 1. Verify Old Password by trying to Sign In (Re-auth)
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: this.currentUser.email,
+      password: oldPassword
+    });
 
-     if (signInError) {
-        throw new Error("A senha atual está incorreta.");
-     }
+    if (signInError) {
+      throw new Error("A senha atual está incorreta.");
+    }
 
-     // 2. Update Password
-     const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+    // 2. Update Password
+    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
 
-     if (updateError) {
-        throw new Error(updateError.message);
-     }
+    if (updateError) {
+      throw new Error(updateError.message);
+    }
   }
 
   async uploadAvatar(userId: string, file: File): Promise<string> {
@@ -151,7 +152,7 @@ class SupabaseService {
       .from('images')
       .upload(fileName, file, {
         cacheControl: '3600',
-        upsert: true 
+        upsert: true
       });
 
     if (uploadError) {
@@ -169,20 +170,20 @@ class SupabaseService {
   async uploadSystemAsset(file: File, type: 'logo' | 'favicon'): Promise<string> {
     let fileName = '';
     if (type === 'logo') {
-        fileName = 'system/app_logo.png'; 
+      fileName = 'system/app_logo.png';
     } else {
-        fileName = 'system/app_favicon.png';
+      fileName = 'system/app_favicon.png';
     }
 
     const { error: uploadError } = await supabase.storage
       .from('images')
       .upload(fileName, file, {
-        cacheControl: '0', 
+        cacheControl: '0',
         upsert: true
       });
 
     if (uploadError) {
-       throw new Error(`Erro no upload do ${type}: ${uploadError.message}`);
+      throw new Error(`Erro no upload do ${type}: ${uploadError.message}`);
     }
 
     const { data } = supabase.storage
@@ -207,10 +208,11 @@ class SupabaseService {
       this.fetchSectors(),
       this.fetchProjects(),
       this.fetchTasks(),
-      this.fetchBoardTasks(), 
-      this.fetchChatChannels(), 
-      this.fetchChatMessages(), 
+      this.fetchBoardTasks(),
+      this.fetchChatChannels(),
+      this.fetchChatMessages(),
       this.fetchLogs(),
+      this.fetchWeeklyHistory(),
       this.fetchSystemSettings()
     ]);
 
@@ -226,7 +228,8 @@ class SupabaseService {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sectors' }, () => this.fetchSectors().then(() => this.notify()))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => this.fetchUsers().then(() => this.notify()))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_channels' }, () => this.fetchChatChannels().then(() => this.notify()))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, () => this.fetchChatMessages().then(() => this.notify())) 
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, () => this.fetchChatMessages().then(() => this.notify()))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'weekly_history' }, () => this.fetchWeeklyHistory().then(() => this.notify()))
       .subscribe();
   }
 
@@ -252,7 +255,7 @@ class SupabaseService {
     const { data } = await supabase.from('board_tasks').select('*').order('updated_at', { ascending: false });
     if (data) this.boardTasks = data.map(this.mapDbToBoardTask);
   }
-  
+
   private async fetchSectors() {
     const { data } = await supabase.from('sectors').select('*');
     if (data) this.sectors = data;
@@ -277,207 +280,225 @@ class SupabaseService {
 
   // Chat Fetchers
   private async fetchChatChannels() {
-      try {
-          const { data, error } = await supabase.from('chat_channels').select('*').order('created_at', { ascending: true });
-          if (error) {
-              console.warn("Could not fetch chat channels:", error.message);
-              // Fallback
-              if(this.chatChannels.length === 0) {
-                 this.chatChannels = [{
-                     id: 'general-channel-id',
-                     name: 'Geral',
-                     isLocked: false,
-                     lockedByUserId: null,
-                     createdAt: new Date().toISOString()
-                 }];
-              }
-              return;
-          }
-          
-          if (data && data.length > 0) {
-              this.chatChannels = data.map(c => ({
-                  id: c.id,
-                  name: c.name,
-                  isLocked: c.is_locked,
-                  lockedByUserId: c.locked_by,
-                  createdAt: c.created_at
-              }));
-          } else {
-             // Create default 'Geral' channel if none exist
-             await this.createChatChannel('Geral');
-          }
-      } catch (e) {
-          console.error("Error fetching channels:", e);
+    try {
+      const { data, error } = await supabase.from('chat_channels').select('*').order('created_at', { ascending: true });
+      if (error) {
+        console.warn("Could not fetch chat channels:", error.message);
+        // Fallback
+        if (this.chatChannels.length === 0) {
+          this.chatChannels = [{
+            id: 'general-channel-id',
+            name: 'Geral',
+            isLocked: false,
+            lockedByUserId: null,
+            createdAt: new Date().toISOString()
+          }];
+        }
+        return;
       }
+
+      if (data && data.length > 0) {
+        this.chatChannels = data.map(c => ({
+          id: c.id,
+          name: c.name,
+          isLocked: c.is_locked,
+          lockedByUserId: c.locked_by,
+          createdAt: c.created_at
+        }));
+      } else {
+        // Create default 'Geral' channel if none exist
+        await this.createChatChannel('Geral');
+      }
+    } catch (e) {
+      console.error("Error fetching channels:", e);
+    }
   }
 
   private async fetchChatMessages() {
-      // Fetch latest 200 messages globally 
-      const { data } = await supabase.from('chat_messages').select('*').order('created_at', { ascending: true }).limit(200);
-      if (data) {
-          this.chatMessages = data.map(msg => ({
-              id: msg.id,
-              channelId: msg.channel_id || 'general-channel-id', // Backward compatibility
-              userId: msg.user_id,
-              role: msg.role,
-              content: msg.content,
-              createdAt: msg.created_at,
-              user: this.users.find(u => u.id === msg.user_id)
-          }));
-      }
+    // Fetch latest 200 messages globally 
+    const { data } = await supabase.from('chat_messages').select('*').order('created_at', { ascending: true }).limit(200);
+    if (data) {
+      this.chatMessages = data.map(msg => ({
+        id: msg.id,
+        channelId: msg.channel_id || 'general-channel-id', // Backward compatibility
+        userId: msg.user_id,
+        role: msg.role,
+        content: msg.content,
+        createdAt: msg.created_at,
+        user: this.users.find(u => u.id === msg.user_id)
+      }));
+    }
   }
-  
+
   private async fetchSystemSettings() {
-      const { data: logoData } = supabase.storage.from('images').getPublicUrl('system/app_logo.png');
-      const { data: faviconData } = supabase.storage.from('images').getPublicUrl('system/app_favicon.png');
-      
-      this.settings.logoUrl = `${logoData.publicUrl}?t=${new Date().getTime()}`;
-      this.settings.faviconUrl = `${faviconData.publicUrl}?t=${new Date().getTime()}`;
+    const { data: logoData } = supabase.storage.from('images').getPublicUrl('system/app_logo.png');
+    const { data: faviconData } = supabase.storage.from('images').getPublicUrl('system/app_favicon.png');
+
+    this.settings.logoUrl = `${logoData.publicUrl}?t=${new Date().getTime()}`;
+    this.settings.faviconUrl = `${faviconData.publicUrl}?t=${new Date().getTime()}`;
+  }
+
+  private async fetchWeeklyHistory() {
+    const { data } = await supabase.from('weekly_history').select('*').order('created_at', { ascending: false });
+    if (data) {
+      this.weeklyHistory = data.map(h => ({
+        id: h.id,
+        startDate: h.start_date,
+        endDate: h.end_date,
+        totalHours: h.total_hours,
+        tasksCompleted: h.tasks_completed,
+        tasksPending: h.tasks_pending,
+        tasks: h.tasks_snapshot, // JSONB
+        boardTasks: h.board_tasks_snapshot, // JSONB
+        createdAt: h.created_at
+      }));
+    }
   }
 
 
   // --- Getters ---
   getTasks() { return this.tasks; }
   getBoardTasks() { return this.boardTasks; }
+  getWeeklyHistory() { return this.weeklyHistory; }
   getSectors() { return this.sectors; }
   getProjects() { return this.projects; }
   getUsers() { return this.users; }
   getLogs() { return this.logs; }
   getSettings() { return this.settings; }
-  
+
   // FIX: Return all messages if no channelId provided
-  getChatMessages(channelId?: string) { 
-      if (!channelId) return this.chatMessages;
-      return this.chatMessages.filter(m => m.channelId === channelId); 
+  getChatMessages(channelId?: string) {
+    if (!channelId) return this.chatMessages;
+    return this.chatMessages.filter(m => m.channelId === channelId);
   }
   getChatChannels() { return this.chatChannels; }
 
 
   // --- Chat Actions ---
-  
+
   async createChatChannel(name: string) {
-      if (!this.currentUser) return;
-      const { error } = await supabase.from('chat_channels').insert({
-          name: name,
-          is_locked: false,
-          locked_by: null,
-          created_at: new Date().toISOString()
-      });
-      if (error) throw new Error(error.message);
-      await this.fetchChatChannels();
-      this.notify();
+    if (!this.currentUser) return;
+    const { error } = await supabase.from('chat_channels').insert({
+      name: name,
+      is_locked: false,
+      locked_by: null,
+      created_at: new Date().toISOString()
+    });
+    if (error) throw new Error(error.message);
+    await this.fetchChatChannels();
+    this.notify();
   }
 
   async deleteChatChannel(id: string) {
-     if (confirm("Excluir este canal e todas as mensagens?")) {
-         await supabase.from('chat_channels').delete().eq('id', id);
-         await supabase.from('chat_messages').delete().eq('channel_id', id);
-         await this.fetchChatChannels();
-         this.notify();
-     }
+    if (confirm("Excluir este canal e todas as mensagens?")) {
+      await supabase.from('chat_channels').delete().eq('id', id);
+      await supabase.from('chat_messages').delete().eq('channel_id', id);
+      await this.fetchChatChannels();
+      this.notify();
+    }
   }
 
   async sendChatMessage(channelId: string, content: string) {
-      if (!this.currentUser) return;
-      if (!this.ai) {
-        throw new Error("Chat indisponível: API Key não configurada.");
-      }
-      
-      // Find current channel state (use local cache for immediate check)
-      const channel = this.chatChannels.find(c => c.id === channelId);
-      if (!channel) throw new Error("Canal não encontrado.");
+    if (!this.currentUser) return;
+    if (!this.ai) {
+      throw new Error("Chat indisponível: API Key não configurada.");
+    }
 
-      // Check lock locally first
-      if (channel.isLocked) throw new Error("O chat está bloqueado por outro usuário.");
+    // Find current channel state (use local cache for immediate check)
+    const channel = this.chatChannels.find(c => c.id === channelId);
+    if (!channel) throw new Error("Canal não encontrado.");
 
-      try {
-          // Lock the channel
-          await supabase.from('chat_channels').update({
-              is_locked: true,
-              locked_by: this.currentUser.id
-          }).eq('id', channelId);
-          
-          // Insert User Message
-          await supabase.from('chat_messages').insert({
-              channel_id: channelId,
-              user_id: this.currentUser.id,
-              role: 'user',
-              content: content
-          });
+    // Check lock locally first
+    if (channel.isLocked) throw new Error("O chat está bloqueado por outro usuário.");
 
-          // FORCE UI UPDATE (User message)
-          await this.fetchChatMessages();
-          this.notify();
+    try {
+      // Lock the channel
+      await supabase.from('chat_channels').update({
+        is_locked: true,
+        locked_by: this.currentUser.id
+      }).eq('id', channelId);
 
-          // PREPARE CONTEXT FOR GEMINI
-          const historyLimit = 15;
-          const channelMessages = this.getChatMessages(channelId).slice(-historyLimit);
-          
-          let historyPrompt = "Histórico do canal:\n";
-          channelMessages.forEach(msg => {
-              const name = msg.user ? msg.user.name : "Gemini AI";
-              historyPrompt += `${name}: ${msg.content}\n`;
-          });
-          
-          const currentPrompt = `O usuário ${this.currentUser.name} disse: ${content}`;
+      // Insert User Message
+      await supabase.from('chat_messages').insert({
+        channel_id: channelId,
+        user_id: this.currentUser.id,
+        role: 'user',
+        content: content
+      });
 
-          // CALL GEMINI - UPGRADED TO 3.0
-          const response = await this.ai.models.generateContent({
-              model: 'gemini-3-flash-preview', 
-              contents: [
-                {
-                    role: 'user',
-                    parts: [{ text: historyPrompt + "\n" + currentPrompt }]
-                }
-              ],
-              config: {
-                 systemInstruction: `Você é um assistente de IA colaborativo da equipe ITI TECH. Você está no canal de chat "${channel.name}". Responda de forma concisa, profissional e útil.`,
-              }
-          });
+      // FORCE UI UPDATE (User message)
+      await this.fetchChatMessages();
+      this.notify();
 
-          const aiResponseText = response.text;
+      // PREPARE CONTEXT FOR GEMINI
+      const historyLimit = 15;
+      const channelMessages = this.getChatMessages(channelId).slice(-historyLimit);
 
-          // Insert AI Message
-          await supabase.from('chat_messages').insert({
-              channel_id: channelId,
-              user_id: null,
-              role: 'model',
-              content: aiResponseText
-          });
-          
-          // FORCE UI UPDATE (AI Response)
-          await this.fetchChatMessages();
-          this.notify();
+      let historyPrompt = "Histórico do canal:\n";
+      channelMessages.forEach(msg => {
+        const name = msg.user ? msg.user.name : "Gemini AI";
+        historyPrompt += `${name}: ${msg.content}\n`;
+      });
 
-      } catch (err: any) {
-          console.error("Chat Error:", err);
-          let errorMsg = "Erro na IA.";
-           if (err.message?.includes('404')) errorMsg += " (Modelo não encontrado)";
-          if (err.message?.includes('403')) errorMsg += " (Chave inválida)";
+      const currentPrompt = `O usuário ${this.currentUser.name} disse: ${content}`;
 
-          await supabase.from('chat_messages').insert({
-              channel_id: channelId,
-              user_id: null,
-              role: 'model',
-              content: errorMsg
-          });
-          
-          // FORCE UI UPDATE (Error)
-          await this.fetchChatMessages();
-          this.notify();
+      // CALL GEMINI - UPGRADED TO 3.0
+      const response = await this.ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: historyPrompt + "\n" + currentPrompt }]
+          }
+        ],
+        config: {
+          systemInstruction: `Você é um assistente de IA colaborativo da equipe ITI TECH. Você está no canal de chat "${channel.name}". Responda de forma concisa, profissional e útil.`,
+        }
+      });
 
-      } finally {
-          // Unlock
-          await supabase.from('chat_channels').update({
-              is_locked: false,
-              locked_by: null
-          }).eq('id', channelId);
-      }
+      const aiResponseText = response.text;
+
+      // Insert AI Message
+      await supabase.from('chat_messages').insert({
+        channel_id: channelId,
+        user_id: null,
+        role: 'model',
+        content: aiResponseText
+      });
+
+      // FORCE UI UPDATE (AI Response)
+      await this.fetchChatMessages();
+      this.notify();
+
+    } catch (err: any) {
+      console.error("Chat Error:", err);
+      let errorMsg = "Erro na IA.";
+      if (err.message?.includes('404')) errorMsg += " (Modelo não encontrado)";
+      if (err.message?.includes('403')) errorMsg += " (Chave inválida)";
+
+      await supabase.from('chat_messages').insert({
+        channel_id: channelId,
+        user_id: null,
+        role: 'model',
+        content: errorMsg
+      });
+
+      // FORCE UI UPDATE (Error)
+      await this.fetchChatMessages();
+      this.notify();
+
+    } finally {
+      // Unlock
+      await supabase.from('chat_channels').update({
+        is_locked: false,
+        locked_by: null
+      }).eq('id', channelId);
+    }
   }
 
 
   // --- Actions ---
-  
+
   // TASKS
   async createTask(task: Omit<Task, 'id' | 'updatedAt'>) {
     const dbTask = {
@@ -493,10 +514,10 @@ class SupabaseService {
       notes: task.notes,
       updated_at: new Date().toISOString()
     };
-    
+
     const { error } = await supabase.from('tasks').insert(dbTask);
     if (error) throw new Error(`Erro ao criar tarefa: ${error.message}`);
-    
+
     await this.fetchTasks();
     this.notify();
     await this.logAction('CREATE', `Nova atividade: ${task.plannedActivity}`);
@@ -516,7 +537,7 @@ class SupabaseService {
 
     const { error } = await supabase.from('tasks').update(dbUpdates).eq('id', id);
     if (error) throw new Error(`Erro ao atualizar tarefa: ${error.message}`);
-    
+
     await this.fetchTasks();
     this.notify();
     await this.logAction('UPDATE', `Atividade atualizada`);
@@ -525,11 +546,11 @@ class SupabaseService {
   async toggleTaskCompletion(id: string) {
     const task = this.tasks.find(t => t.id === id);
     if (!task) return;
-    
+
     const newStatus = task.status === Status.COMPLETED ? Status.PENDING : Status.COMPLETED;
-    const newDelivered = newStatus === Status.COMPLETED && !task.deliveredActivity 
-       ? task.plannedActivity 
-       : task.deliveredActivity;
+    const newDelivered = newStatus === Status.COMPLETED && !task.deliveredActivity
+      ? task.plannedActivity
+      : task.deliveredActivity;
 
     await this.updateTask(id, { status: newStatus, deliveredActivity: newDelivered });
   }
@@ -537,7 +558,7 @@ class SupabaseService {
   async deleteTask(id: string) {
     const { error } = await supabase.from('tasks').delete().eq('id', id);
     if (error) throw new Error(`Erro ao excluir tarefa: ${error.message}`);
-    
+
     await this.fetchTasks();
     this.notify();
     await this.logAction('DELETE', 'Atividade removida');
@@ -546,19 +567,19 @@ class SupabaseService {
   // --- NEW ACTIONS FOR BOARD TASKS ---
   async createBoardTask(task: Omit<BoardTask, 'id' | 'updatedAt'>) {
     const dbTask = {
-       title: task.title,
-       description: task.description,
-       start_date: task.startDate,
-       end_date: task.endDate,
-       member_ids: task.memberIds, // JSONB or Array in Supabase
-       subtasks: task.subtasks,    // JSONB in Supabase
-       status: task.status,
-       updated_at: new Date().toISOString()
+      title: task.title,
+      description: task.description,
+      start_date: task.startDate,
+      end_date: task.endDate,
+      member_ids: task.memberIds, // JSONB or Array in Supabase
+      subtasks: task.subtasks,    // JSONB in Supabase
+      status: task.status,
+      updated_at: new Date().toISOString()
     };
 
     const { error } = await supabase.from('board_tasks').insert(dbTask);
     if (error) throw new Error(`Erro ao criar tarefa do quadro: ${error.message}`);
-    
+
     await this.fetchBoardTasks();
     this.notify();
     await this.logAction('CREATE', `Novo quadro: ${task.title}`);
@@ -582,12 +603,12 @@ class SupabaseService {
   }
 
   async deleteBoardTask(id: string) {
-     const { error } = await supabase.from('board_tasks').delete().eq('id', id);
-     if (error) throw new Error(`Erro ao excluir tarefa do quadro: ${error.message}`);
-     
-     await this.fetchBoardTasks();
-     this.notify();
-     await this.logAction('DELETE', 'Tarefa do quadro removida');
+    const { error } = await supabase.from('board_tasks').delete().eq('id', id);
+    if (error) throw new Error(`Erro ao excluir tarefa do quadro: ${error.message}`);
+
+    await this.fetchBoardTasks();
+    this.notify();
+    await this.logAction('DELETE', 'Tarefa do quadro removida');
   }
 
   // SECTORS & PROJECTS
@@ -620,10 +641,10 @@ class SupabaseService {
   }
 
   // USERS
-  async createUser(name: string, email: string, role: 'admin'|'user', sector: string) {
+  async createUser(name: string, email: string, role: 'admin' | 'user', sector: string) {
     const { error } = await supabase.from('profiles').insert({
-       id: crypto.randomUUID(), 
-       email, name, role, sector, avatar: `https://ui-avatars.com/api/?name=${name}`
+      id: crypto.randomUUID(),
+      email, name, role, sector, avatar: `https://ui-avatars.com/api/?name=${name}`
     });
     if (error) throw error;
     await this.fetchUsers();
@@ -652,7 +673,7 @@ class SupabaseService {
 
   calculateTotalHours(collaboratorId?: string): string {
     let totalMinutes = 0;
-    const targetTasks = collaboratorId 
+    const targetTasks = collaboratorId
       ? this.tasks.filter(t => t.collaboratorId === collaboratorId)
       : this.tasks;
 
@@ -686,20 +707,20 @@ class SupabaseService {
       updatedAt: db.updated_at
     };
   }
-  
+
   // NEW Mapper
   private mapDbToBoardTask(db: any): BoardTask {
-      return {
-          id: db.id,
-          title: db.title,
-          description: db.description,
-          startDate: db.start_date,
-          endDate: db.end_date,
-          memberIds: db.member_ids || [], // Ensure array
-          status: db.status as BoardStatus,
-          subtasks: db.subtasks || [],    // Ensure array
-          updatedAt: db.updated_at
-      }
+    return {
+      id: db.id,
+      title: db.title,
+      description: db.description,
+      startDate: db.start_date,
+      endDate: db.end_date,
+      memberIds: db.member_ids || [], // Ensure array
+      status: db.status as BoardStatus,
+      subtasks: db.subtasks || [],    // Ensure array
+      updatedAt: db.updated_at
+    }
   }
 
   private mapProfileToUser(p: any): User {
@@ -711,6 +732,61 @@ class SupabaseService {
       role: p.role as 'admin' | 'user',
       sector: p.sector
     };
+  }
+  // --- WEEKLY MANAGEMENT ---
+
+  async closeWeek() {
+    if (!this.currentUser) return;
+
+    // 1. Calculate Stats
+    const totalHours = this.calculateTotalHours(); // Global calculate
+    const completed = this.tasks.filter(t => t.status === Status.COMPLETED).length;
+    const pending = this.tasks.length - completed;
+
+    // 2. Prepare Snapshot Data
+    const historyEntry = {
+      start_date: new Date().toISOString(), // Simplified for now, logical start
+      end_date: new Date().toISOString(),
+      total_hours: totalHours,
+      tasks_completed: completed,
+      tasks_pending: pending,
+      tasks_snapshot: this.tasks,
+      board_tasks_snapshot: this.boardTasks,
+      created_at: new Date().toISOString()
+    };
+
+    // 3. Insert into History
+    const { error: historyError } = await supabase.from('weekly_history').insert(historyEntry);
+    if (historyError) throw new Error(`Erro ao salvar histórico: ${historyError.message}`);
+
+    // 4. Clear Current Tables (Danger Zone!)
+    // Note: We need to be careful. Ideally we use transactions or batch operations.
+    // For now, we delete row by row or use a bulk delete if RLS allows.
+    // Supabase delete without ID deletes ALL rows if RLS policies allow it for the user.
+
+    // Delete all tasks
+    if (this.tasks.length > 0) {
+      const taskIds = this.tasks.map(t => t.id);
+      const { error: deleteTasksError } = await supabase.from('tasks').delete().in('id', taskIds);
+      if (deleteTasksError) console.error("Error clearing tasks", deleteTasksError);
+    }
+
+    // Delete all board tasks
+    if (this.boardTasks.length > 0) {
+      const boardIds = this.boardTasks.map(b => b.id);
+      const { error: deleteBoardError } = await supabase.from('board_tasks').delete().in('id', boardIds);
+      if (deleteBoardError) console.error("Error clearing board", deleteBoardError);
+    }
+
+    // Refresh
+    await Promise.all([
+      this.fetchTasks(),
+      this.fetchBoardTasks(),
+      this.fetchWeeklyHistory()
+    ]);
+
+    this.notify();
+    await this.logAction('DELETE', 'Semana fechada e dados resetados.');
   }
 }
 
