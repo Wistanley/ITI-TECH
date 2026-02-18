@@ -1,8 +1,9 @@
 
 import React, { useMemo } from 'react';
 import { Task, Project, Status, User } from '../types';
-import { PieChart, BarChart3, TrendingUp, CheckCircle2, Users, Clock } from 'lucide-react';
+import { PieChart, BarChart3, TrendingUp, CheckCircle2, Users, Clock, Layers } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { backend } from '../services/supabaseBackend';
 
 interface Props {
   tasks: Task[];
@@ -11,7 +12,19 @@ interface Props {
 }
 
 export const DashboardAnalytics: React.FC<Props> = ({ tasks, projects, users }) => {
-  
+
+  const handleCloseWeek = async () => {
+    const confirmText = "FECHAMENTO SEMANAL\n\nTem certeza? Isso irá:\n1. Salvar os dados atuais no histórico\n2. Limpar todas as atividades\n3. Zerar as contagens\n\nEssa ação é irreversível.";
+    if (confirm(confirmText)) {
+      try {
+        await backend.closeWeek();
+        alert("Semana fechada com sucesso! O histórico foi salvo.");
+      } catch (err: any) {
+        alert(err.message);
+      }
+    }
+  };
+
   // --- Logic: Hours per Project ---
   const projectStats = useMemo(() => {
     const map = new Map<string, number>(); // ProjectId -> Minutes
@@ -78,12 +91,12 @@ export const DashboardAnalytics: React.FC<Props> = ({ tasks, projects, users }) 
       const hours = Math.floor(minutes / 60);
       const mins = minutes % 60;
       const formatted = `${hours}h ${mins.toString().padStart(2, '0')}`;
-      
+
       // Determine color based on load
       let colorClass = 'from-blue-600 to-cyan-400';
       if (hours > 44) colorClass = 'from-rose-600 to-rose-400'; // Overtime
       else if (hours > 40) colorClass = 'from-amber-500 to-orange-400'; // High load
-      
+
       return {
         id: user.id,
         name: user.name,
@@ -107,8 +120,20 @@ export const DashboardAnalytics: React.FC<Props> = ({ tasks, projects, users }) 
 
   return (
     <div className="flex flex-col gap-4 md:gap-6 mb-8 w-full">
+
+      {/* Header Actions */}
+      <div className="flex justify-end">
+        <button
+          onClick={handleCloseWeek}
+          className="bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/20 px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2"
+        >
+          <Layers size={16} />
+          Fechar Semana
+        </button>
+      </div>
+
       {/* Row 1: Projects & Status */}
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="grid grid-cols-1 xl:grid-cols-3 gap-4 md:gap-6"
@@ -119,7 +144,7 @@ export const DashboardAnalytics: React.FC<Props> = ({ tasks, projects, users }) 
             <BarChart3 className="text-primary" size={20} />
             <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wide">Horas por Projeto</h3>
           </div>
-          
+
           <div className="space-y-4">
             {projectStats.data.length > 0 ? (
               projectStats.data.map((item, index) => (
@@ -129,7 +154,7 @@ export const DashboardAnalytics: React.FC<Props> = ({ tasks, projects, users }) 
                     <span className="text-slate-400 font-mono whitespace-nowrap">{item.formatted}</span>
                   </div>
                   <div className="w-full bg-navy-900 rounded-full h-2.5 overflow-hidden">
-                    <motion.div 
+                    <motion.div
                       initial={{ width: 0 }}
                       animate={{ width: `${(item.minutes / projectStats.max) * 100}%` }}
                       transition={{ duration: 1, ease: "easeOut" }}
@@ -149,10 +174,10 @@ export const DashboardAnalytics: React.FC<Props> = ({ tasks, projects, users }) 
         {/* --- Card 2: Completion Rate (Donut Chart) --- */}
         <div className="bg-navy-800/50 border border-slate-700/50 rounded-xl p-4 sm:p-6 shadow-lg backdrop-blur-sm flex flex-col items-center justify-center relative overflow-hidden min-h-[280px] xl:min-h-0">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-emerald-300"></div>
-          
+
           <div className="flex items-center gap-2 mb-4 w-full">
-             <PieChart className="text-emerald-400" size={20} />
-             <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wide">Taxa de Entrega</h3>
+            <PieChart className="text-emerald-400" size={20} />
+            <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wide">Taxa de Entrega</h3>
           </div>
 
           <div className="flex flex-col items-center justify-center flex-1 w-full">
@@ -185,7 +210,7 @@ export const DashboardAnalytics: React.FC<Props> = ({ tasks, projects, users }) 
                   className="text-emerald-500 drop-shadow-[0_0_10px_rgba(16,185,129,0.4)]"
                 />
               </svg>
-              
+
               {/* Center Text */}
               <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
                 <span className="text-2xl sm:text-3xl font-bold tracking-tighter">{statusStats.percent}%</span>
@@ -194,14 +219,14 @@ export const DashboardAnalytics: React.FC<Props> = ({ tasks, projects, users }) 
             </div>
 
             <div className="w-full mt-6 grid grid-cols-2 gap-3 text-center">
-                <div className="bg-navy-900/50 rounded-lg p-3 border border-slate-800">
-                   <span className="block text-xl font-bold text-emerald-400">{statusStats.completed}</span>
-                   <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Entregues</span>
-                </div>
-                <div className="bg-navy-900/50 rounded-lg p-3 border border-slate-800">
-                   <span className="block text-xl font-bold text-blue-400">{statusStats.pending}</span>
-                   <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Pendentes</span>
-                </div>
+              <div className="bg-navy-900/50 rounded-lg p-3 border border-slate-800">
+                <span className="block text-xl font-bold text-emerald-400">{statusStats.completed}</span>
+                <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Entregues</span>
+              </div>
+              <div className="bg-navy-900/50 rounded-lg p-3 border border-slate-800">
+                <span className="block text-xl font-bold text-blue-400">{statusStats.pending}</span>
+                <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Pendentes</span>
+              </div>
             </div>
           </div>
         </div>
@@ -215,42 +240,42 @@ export const DashboardAnalytics: React.FC<Props> = ({ tasks, projects, users }) 
         className="bg-navy-800/50 border border-slate-700/50 rounded-xl p-4 sm:p-6 shadow-lg backdrop-blur-sm"
       >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-2">
-           <div className="flex items-center gap-2">
-              <Users className="text-primary" size={20} />
-              <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wide">Carga Horária Semanal (Máx: 44h)</h3>
-           </div>
-           <div className="flex items-center gap-3 text-[10px] sm:text-xs text-slate-500 font-medium">
-              <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-blue-500"></div>Normal</div>
-              <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-amber-500"></div>Atenção</div>
-              <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-rose-500"></div>Hora Extra</div>
-           </div>
+          <div className="flex items-center gap-2">
+            <Users className="text-primary" size={20} />
+            <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wide">Carga Horária Semanal (Máx: 44h)</h3>
+          </div>
+          <div className="flex items-center gap-3 text-[10px] sm:text-xs text-slate-500 font-medium">
+            <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-blue-500"></div>Normal</div>
+            <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-amber-500"></div>Atenção</div>
+            <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-rose-500"></div>Hora Extra</div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
           {collaboratorStats.data.map((user) => (
-             <div key={user.id} className="flex items-center gap-3 group p-3 rounded-xl bg-navy-900/30 hover:bg-navy-900/60 transition-colors border border-transparent hover:border-slate-800">
-                <img src={user.avatar} className="w-10 h-10 rounded-full border border-slate-700 object-cover bg-navy-950" alt={user.name} />
-                <div className="flex-1 min-w-0">
-                   <div className="flex justify-between items-end mb-1.5">
-                      <span className="text-sm font-medium text-slate-200 truncate pr-2">{user.name}</span>
-                      <span className={`text-xs font-mono font-bold whitespace-nowrap ${user.minutes > (44*60) ? 'text-rose-400' : 'text-slate-400'}`}>
-                        {user.formatted}
-                      </span>
-                   </div>
-                   
-                   <div className="relative w-full h-2 bg-navy-950 rounded-full overflow-hidden border border-slate-800/50">
-                      {/* Grid Lines for visual context (0, 22, 44) */}
-                      <div className="absolute top-0 bottom-0 left-1/2 w-px bg-slate-800/50 z-10"></div>
-                      
-                      <motion.div 
-                        initial={{ width: 0 }}
-                        animate={{ width: `${user.percentage}%` }}
-                        transition={{ duration: 1.2, ease: "easeOut" }}
-                        className={`h-full rounded-full bg-gradient-to-r ${user.colorClass}`}
-                      />
-                   </div>
+            <div key={user.id} className="flex items-center gap-3 group p-3 rounded-xl bg-navy-900/30 hover:bg-navy-900/60 transition-colors border border-transparent hover:border-slate-800">
+              <img src={user.avatar} className="w-10 h-10 rounded-full border border-slate-700 object-cover bg-navy-950" alt={user.name} />
+              <div className="flex-1 min-w-0">
+                <div className="flex justify-between items-end mb-1.5">
+                  <span className="text-sm font-medium text-slate-200 truncate pr-2">{user.name}</span>
+                  <span className={`text-xs font-mono font-bold whitespace-nowrap ${user.minutes > (44 * 60) ? 'text-rose-400' : 'text-slate-400'}`}>
+                    {user.formatted}
+                  </span>
                 </div>
-             </div>
+
+                <div className="relative w-full h-2 bg-navy-950 rounded-full overflow-hidden border border-slate-800/50">
+                  {/* Grid Lines for visual context (0, 22, 44) */}
+                  <div className="absolute top-0 bottom-0 left-1/2 w-px bg-slate-800/50 z-10"></div>
+
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${user.percentage}%` }}
+                    transition={{ duration: 1.2, ease: "easeOut" }}
+                    className={`h-full rounded-full bg-gradient-to-r ${user.colorClass}`}
+                  />
+                </div>
+              </div>
+            </div>
           ))}
         </div>
       </motion.div>
