@@ -562,7 +562,7 @@ export default function App() {
 
             {/* VIEW: HISTORY (NEW) */}
             {currentView === 'history' && (
-              <HistoryView history={history} />
+              <HistoryView history={history} projects={projects} users={users} />
             )}
 
             {/* VIEW: SETTINGS */}

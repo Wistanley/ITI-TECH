@@ -1,20 +1,26 @@
 import React from 'react';
-import { WeeklyHistory, Task, BoardTask } from '../types';
+import { WeeklyHistory, Task, BoardTask, Project, User } from '../types';
 import { Calendar, Clock, CheckCircle, Download, ChevronRight, XCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface HistoryViewProps {
     history: WeeklyHistory[];
+    projects: Project[];
+    users: User[];
 }
 
-export const HistoryView: React.FC<HistoryViewProps> = ({ history }) => {
+export const HistoryView: React.FC<HistoryViewProps> = ({ history, projects, users }) => {
+
+    // Helpers to resolve names
+    const getProjectName = (id: string) => projects.find(p => p.id === id)?.name || id;
+    const getUserName = (id: string) => users.find(u => u.id === id)?.name || id;
 
     const handleExport = (week: WeeklyHistory) => {
         // 1. Prepare Data for Tasks Sheet
         const tasksData = week.tasks.map(t => ({
-            Projeto: t.projectId, // Idealmente buscar nome, mas snapshot guarda estrutura bruta
+            Projeto: getProjectName(t.projectId),
             Setor: t.sector,
-            Colaborador: t.collaboratorId, // Mesmo aqui
+            Colaborador: getUserName(t.collaboratorId),
             'Atividade Planejada': t.plannedActivity,
             'Atividade Entregue': t.deliveredActivity,
             Status: t.status,
@@ -25,24 +31,51 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ history }) => {
         }));
 
         // 2. Prepare Data for Board Sheet
-        const boardData = week.boardTasks.map(b => ({
-            Titulo: b.title,
-            Status: b.status,
-            'Data Inicio': b.startDate,
-            'Data Fim': b.endDate,
-            'Descrição': b.description
-        }));
+        const boardData = week.boardTasks.map(b => {
+            // Resolve member names if possible (assuming memberIds is array of strings)
+            const members = b.memberIds?.map(mid => getUserName(mid)).join(', ') || '';
+            return {
+                Titulo: b.title,
+                Status: b.status,
+                'Data Inicio': b.startDate,
+                'Data Fim': b.endDate,
+                'Membros': members,
+                'Descrição': b.description
+            };
+        });
 
         // 3. Create Workbook
         const wb = XLSX.utils.book_new();
-        const tasksSheet = XLSX.utils.json_to_sheet(tasksData);
-        const boardSheet = XLSX.utils.json_to_sheet(boardData);
+
+        // Custom Header Helper
+        const createSheetWithHeader = (data: any[], title: string) => {
+            const ws = XLSX.utils.json_to_sheet([], { skipHeader: true });
+
+            // Add Title Rows
+            XLSX.utils.sheet_add_aoa(ws, [
+                ["ITI Tech - Relatório Semanal"],
+                [`Semana de: ${new Date(week.createdAt).toLocaleDateString('pt-BR')}`],
+                [""] // Empty row
+            ], { origin: "A1" });
+
+            // Add Headers & Data starting at A4
+            XLSX.utils.sheet_add_json(ws, data, { origin: "A4" });
+
+            // Basic Column Widths (Approximation)
+            const wscols = Object.keys(data[0] || {}).map(() => ({ wch: 20 }));
+            ws['!cols'] = wscols;
+
+            return ws;
+        };
+
+        const tasksSheet = createSheetWithHeader(tasksData, "Atividades");
+        const boardSheet = createSheetWithHeader(boardData, "Quadro");
 
         XLSX.utils.book_append_sheet(wb, tasksSheet, "Atividades");
         XLSX.utils.book_append_sheet(wb, boardSheet, "Quadro");
 
         // 4. Download
-        const fileName = `Relatorio_Semana_${new Date(week.createdAt).toLocaleDateString().replace(/\//g, '-')}.xlsx`;
+        const fileName = `ITI_Tech_Relatorio_${new Date(week.createdAt).toLocaleDateString().replace(/\//g, '-')}.xlsx`;
         XLSX.writeFile(wb, fileName);
     };
 
