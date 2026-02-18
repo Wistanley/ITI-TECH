@@ -1,7 +1,9 @@
 import React from 'react';
 import { WeeklyHistory, Task, BoardTask, Project, User } from '../types';
-import { Calendar, Clock, CheckCircle, Download, ChevronRight, XCircle } from 'lucide-react';
+import { Calendar, Clock, CheckCircle, Download, ChevronRight, XCircle, Edit2, Save, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { backend } from '../services/supabaseBackend';
+import { useState } from 'react';
 
 interface HistoryViewProps {
     history: WeeklyHistory[];
@@ -11,9 +13,28 @@ interface HistoryViewProps {
 
 export const HistoryView: React.FC<HistoryViewProps> = ({ history, projects, users }) => {
 
+    // State for renaming
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editTitle, setEditTitle] = useState('');
+
     // Helpers to resolve names
     const getProjectName = (id: string) => projects.find(p => p.id === id)?.name || id;
     const getUserName = (id: string) => users.find(u => u.id === id)?.name || id;
+
+    const startEditing = (week: WeeklyHistory) => {
+        setEditingId(week.id);
+        setEditTitle(week.title || `Semana de ${new Date(week.createdAt).toLocaleDateString('pt-BR')}`);
+    };
+
+    const saveTitle = async (id: string) => {
+        try {
+            await backend.updateWeeklyHistory(id, editTitle);
+            setEditingId(null);
+        } catch (error) {
+            console.error(error);
+            alert("Erro ao renomear");
+        }
+    };
 
     const handleExport = (week: WeeklyHistory) => {
         // 1. Prepare Data for Tasks Sheet
@@ -108,9 +129,29 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ history, projects, use
                                     <Calendar size={24} />
                                 </div>
                                 <div>
-                                    <h3 className="text-lg font-semibold text-white">
-                                        Semana de {new Date(week.createdAt).toLocaleDateString('pt-BR')}
-                                    </h3>
+                                    {editingId === week.id ? (
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="text"
+                                                value={editTitle}
+                                                onChange={(e) => setEditTitle(e.target.value)}
+                                                className="bg-navy-900 border border-slate-600 text-white rounded px-2 py-1 text-lg font-semibold w-64 focus:border-blue-500 outline-none"
+                                                autoFocus
+                                            />
+                                            <button onClick={() => saveTitle(week.id)} className="text-emerald-400 hover:text-emerald-300"><Save size={18} /></button>
+                                            <button onClick={() => setEditingId(null)} className="text-rose-400 hover:text-rose-300"><X size={18} /></button>
+                                        </div>
+                                    ) : (
+                                        <h3 className="text-lg font-semibold text-white flex items-center gap-2 group/title">
+                                            {week.title || `Semana de ${new Date(week.createdAt).toLocaleDateString('pt-BR')}`}
+                                            <button
+                                                onClick={() => startEditing(week)}
+                                                className="opacity-0 group-hover/title:opacity-100 text-slate-500 hover:text-blue-400 transition-opacity"
+                                            >
+                                                <Edit2 size={14} />
+                                            </button>
+                                        </h3>
+                                    )}
                                     <div className="flex items-center gap-4 text-sm text-slate-400 mt-1">
                                         <span className="flex items-center gap-1">
                                             <Clock size={14} />

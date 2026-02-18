@@ -343,6 +343,7 @@ class SupabaseService {
     if (data) {
       this.weeklyHistory = data.map(h => ({
         id: h.id,
+        title: h.title, // Map title
         startDate: h.start_date,
         endDate: h.end_date,
         totalHours: h.total_hours,
@@ -787,6 +788,13 @@ class SupabaseService {
 
     this.notify();
     await this.logAction('DELETE', 'Semana fechada e dados resetados.');
+  }
+
+  async updateWeeklyHistory(id: string, title: string) {
+    const { error } = await supabase.from('weekly_history').update({ title }).eq('id', id);
+    if (error) throw new Error(`Erro ao atualizar histórico: ${error.message}`);
+    await this.fetchWeeklyHistory();
+    this.notify();
   }
 }
 

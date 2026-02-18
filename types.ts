@@ -121,6 +121,7 @@ export interface ChatState {
 
 export interface WeeklyHistory {
   id: string;
+  title?: string; // New field for custom name
   startDate: string;
   endDate: string;
   totalHours: string;
