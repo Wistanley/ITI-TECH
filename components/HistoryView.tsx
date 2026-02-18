@@ -1,7 +1,7 @@
 import React from 'react';
 import { WeeklyHistory, Task, BoardTask, Project, User } from '../types';
 import { Calendar, Clock, CheckCircle, Download, ChevronRight, XCircle, Edit2, Save, X } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import XLSX from 'xlsx-js-style';
 import { backend } from '../services/supabaseBackend';
 import { useState } from 'react';
 
@@ -72,6 +72,42 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ history, projects, use
         const createSheetWithHeader = (data: any[], title: string) => {
             const ws = XLSX.utils.json_to_sheet([], { skipHeader: true });
 
+            // LOGO / TITLE STYLE
+            const titleStyle = {
+                font: { bold: true, sz: 16, color: { rgb: "FFFFFF" } },
+                fill: { fgColor: { rgb: "1e293b" } }, // Navy-800
+                alignment: { horizontal: "center", vertical: "center" }
+            };
+
+            const subTitleStyle = {
+                font: { bold: true, sz: 12, color: { rgb: "94a3b8" } }, // Slate-400
+                alignment: { horizontal: "center" }
+            };
+
+            // HEADER STYLE
+            const headerStyle = {
+                font: { bold: true, color: { rgb: "FFFFFF" } },
+                fill: { fgColor: { rgb: "3b82f6" } }, // Blue-500
+                alignment: { horizontal: "center" },
+                border: {
+                    top: { style: "thin", color: { rgb: "000000" } },
+                    bottom: { style: "thin", color: { rgb: "000000" } },
+                    left: { style: "thin", color: { rgb: "000000" } },
+                    right: { style: "thin", color: { rgb: "000000" } }
+                }
+            };
+
+            // DATA STYLE
+            const dataStyle = {
+                alignment: { wrapText: true, vertical: "top" },
+                border: {
+                    top: { style: "thin", color: { rgb: "cbd5e1" } },
+                    bottom: { style: "thin", color: { rgb: "cbd5e1" } },
+                    left: { style: "thin", color: { rgb: "cbd5e1" } },
+                    right: { style: "thin", color: { rgb: "cbd5e1" } }
+                }
+            };
+
             // Add Title Rows
             XLSX.utils.sheet_add_aoa(ws, [
                 ["ITI Tech - Relatório Semanal"],
@@ -79,11 +115,41 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ history, projects, use
                 [""] // Empty row
             ], { origin: "A1" });
 
-            // Add Headers & Data starting at A4
-            XLSX.utils.sheet_add_json(ws, data, { origin: "A4" });
+            // Apply Merge for Titles (Assuming ~10 cols)
+            ws['!merges'] = [
+                { s: { r: 0, c: 0 }, e: { r: 0, c: 9 } },
+                { s: { r: 1, c: 0 }, e: { r: 1, c: 9 } }
+            ];
 
-            // Basic Column Widths (Approximation)
-            const wscols = Object.keys(data[0] || {}).map(() => ({ wch: 20 }));
+            // Apply Styles to Titles
+            ws['A1'].s = titleStyle;
+            // Note: Merged cells need style applied to the top-left cell ONLY, but sometimes all cells in range.
+            // library handles it mostly.
+
+            // Add Headers manually to apply style
+            const headers = Object.keys(data[0] || {});
+            XLSX.utils.sheet_add_aoa(ws, [headers], { origin: "A4" });
+
+            headers.forEach((h, i) => {
+                const cellRef = XLSX.utils.encode_cell({ r: 3, c: i });
+                if (!ws[cellRef]) ws[cellRef] = { v: h, t: 's' };
+                ws[cellRef].s = headerStyle;
+            });
+
+            // Add Data
+            XLSX.utils.sheet_add_json(ws, data, { origin: "A5", skipHeader: true });
+
+            // Apply Data Styles
+            const range = XLSX.utils.decode_range(ws['!ref'] || "A1");
+            for (let R = 4; R <= range.e.r; ++R) {
+                for (let C = range.s.c; C <= range.e.c; ++C) {
+                    const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+                    if (ws[cellRef]) ws[cellRef].s = dataStyle;
+                }
+            }
+
+            // Column Widths
+            const wscols = headers.map(() => ({ wch: 25 }));
             ws['!cols'] = wscols;
 
             return ws;
